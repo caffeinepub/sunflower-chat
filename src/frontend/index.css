@@ -1,0 +1,272 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/Outfit.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/assets/fonts/Figtree.woff2") format("woff2");
+}
+
+@layer base {
+  :root {
+    --radius: 1.25rem;
+
+    /* Sunflower Chat - Warm pastel palette */
+    --background: 0.984 0.032 95;
+    --foreground: 0.28 0.04 60;
+
+    --card: 1 0 0;
+    --card-foreground: 0.28 0.04 60;
+
+    --popover: 1 0 0;
+    --popover-foreground: 0.28 0.04 60;
+
+    /* Warm amber primary */
+    --primary: 0.72 0.155 68;
+    --primary-foreground: 1 0 0;
+
+    /* Soft cream secondary */
+    --secondary: 0.97 0.025 90;
+    --secondary-foreground: 0.35 0.05 60;
+
+    /* Muted warm cream */
+    --muted: 0.955 0.022 88;
+    --muted-foreground: 0.56 0.04 65;
+
+    /* Soft green accent */
+    --accent: 0.88 0.08 142;
+    --accent-foreground: 0.28 0.06 130;
+
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+
+    --border: 0.91 0.04 85;
+    --input: 0.94 0.03 88;
+    --ring: 0.72 0.155 68;
+
+    /* Sunflower specific tokens */
+    --sunflower-bg: 0.985 0.038 95;
+    --sunflower-bg-deep: 0.965 0.055 88;
+    --sunflower-sent: 0.93 0.1 80;
+    --sunflower-received: 0.97 0.025 88;
+    --sunflower-amber: 0.72 0.155 68;
+    --sunflower-amber-dark: 0.6 0.145 60;
+    --sunflower-green: 0.88 0.08 142;
+    --sunflower-green-soft: 0.94 0.045 148;
+
+    --chart-1: 0.646 0.222 41.116;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+
+    --sidebar: 0.985 0 0;
+    --sidebar-foreground: 0.145 0 0;
+    --sidebar-primary: 0.205 0 0;
+    --sidebar-primary-foreground: 0.985 0 0;
+    --sidebar-accent: 0.97 0 0;
+    --sidebar-accent-foreground: 0.205 0 0;
+    --sidebar-border: 0.922 0 0;
+    --sidebar-ring: 0.708 0 0;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Outfit", "Figtree", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  input, textarea, button {
+    font-family: inherit;
+  }
+}
+
+@layer utilities {
+  .sunflower-card {
+    @apply bg-white rounded-[20px] shadow-card;
+  }
+
+  .sunflower-input {
+    @apply bg-white border-2 border-border rounded-[16px] px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors duration-200;
+  }
+
+  .sunflower-btn-primary {
+    @apply bg-primary text-primary-foreground rounded-[16px] px-6 py-3 font-semibold hover:opacity-90 active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+
+  .chat-bubble-sent {
+    background: oklch(var(--sunflower-sent));
+    border-radius: 20px 20px 6px 20px;
+  }
+
+  .chat-bubble-received {
+    background: oklch(var(--sunflower-received));
+    border-radius: 20px 20px 20px 6px;
+  }
+
+  .sunflower-page {
+    background: linear-gradient(
+      145deg,
+      oklch(var(--sunflower-bg)) 0%,
+      oklch(var(--sunflower-bg-deep)) 100%
+    );
+    min-height: 100dvh;
+  }
+}
+
+/* ─── Dark Mode (Sunset Sunflower) ─────────────────────────────────────────── */
+[data-theme="dark"] {
+  --background: 0.18 0.04 60;
+  --foreground: 0.95 0.03 88;
+  --card: 0.22 0.04 58;
+  --card-foreground: 0.95 0.03 88;
+  --popover: 0.22 0.04 58;
+  --popover-foreground: 0.95 0.03 88;
+  --primary: 0.72 0.155 68;
+  --primary-foreground: 1 0 0;
+  --secondary: 0.25 0.04 58;
+  --secondary-foreground: 0.85 0.04 80;
+  --muted: 0.28 0.04 60;
+  --muted-foreground: 0.65 0.05 70;
+  --accent: 0.35 0.06 130;
+  --accent-foreground: 0.85 0.08 142;
+  --destructive: 0.55 0.22 25;
+  --destructive-foreground: 0.985 0 0;
+  --border: 0.32 0.05 60;
+  --input: 0.26 0.04 58;
+  --ring: 0.72 0.155 68;
+  --sunflower-bg: 0.16 0.04 55;
+  --sunflower-bg-deep: 0.14 0.04 52;
+  --sunflower-sent: 0.42 0.12 70;
+  --sunflower-received: 0.26 0.04 58;
+  color-scheme: dark;
+}
+
+[data-theme="dark"] .chat-bubble-sent {
+  background: oklch(var(--sunflower-sent));
+}
+
+[data-theme="dark"] .chat-bubble-received {
+  background: oklch(var(--sunflower-received));
+}
+
+[data-theme="dark"] .sunflower-page {
+  background: linear-gradient(
+    145deg,
+    oklch(var(--sunflower-bg)) 0%,
+    oklch(var(--sunflower-bg-deep)) 100%
+  );
+}
+
+[data-theme="dark"] .sunflower-input {
+  background: oklch(var(--input));
+  border-color: oklch(var(--border));
+  color: oklch(var(--foreground));
+}
+
+[data-theme="dark"] .sunflower-card {
+  background: oklch(var(--card));
+}
+
+[data-theme="dark"] .bg-white {
+  background: oklch(var(--card)) !important;
+  color: oklch(var(--card-foreground));
+}
+
+/* ─── Reaction picker animation ─────────────────────────────────────────────── */
+@keyframes reactionPop {
+  0% { opacity: 0; transform: scale(0.6) translateY(8px); }
+  70% { transform: scale(1.15) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.reaction-picker-item {
+  animation: reactionPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(var(--border));
+  border-radius: 999px;
+}
+
+/* Keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes floatBounce {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out both;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+.animate-float {
+  animation: floatBounce 3s ease-in-out infinite;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
