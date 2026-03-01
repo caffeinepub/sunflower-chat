@@ -1,8 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Lock, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Lock,
+  Paperclip,
+  Pencil,
+  Reply,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { MessagePreview } from "../backend.d";
+import type { MessageView } from "../backend.d";
 import { useApp } from "../context/AppContext";
 import { useActor } from "../hooks/useActor";
 import {
@@ -23,9 +31,33 @@ import {
   getSecretMessages,
   getXpLevel,
 } from "../utils/localFeatures";
+import { playReceiveSound, playSendSound } from "../utils/soundEffects";
 
 // ─── Reaction Emojis ──────────────────────────────────────────────────────────
-const REACTION_EMOJIS = ["❤️", "🌻", "😂", "👍"];
+const REACTION_EMOJIS = ["❤️", "🌻", "😂", "👍", "😮", "😢"];
+
+// ─── Parse backend reactions string ──────────────────────────────────────────
+function parseReactions(reactionsStr: string): ReactionsMap {
+  if (!reactionsStr || reactionsStr === "{}") return {};
+  try {
+    // Handle both JSON format and other formats
+    return JSON.parse(reactionsStr) as ReactionsMap;
+  } catch {
+    return {};
+  }
+}
+
+// ─── Merge local + backend reactions ─────────────────────────────────────────
+function mergeReactions(
+  local: ReactionsMap,
+  backend: ReactionsMap,
+): ReactionsMap {
+  const merged: ReactionsMap = { ...backend };
+  for (const [emoji, count] of Object.entries(local)) {
+    merged[emoji] = (merged[emoji] ?? 0) + count;
+  }
+  return merged;
+}
 
 // ─── Reaction Picker ─────────────────────────────────────────────────────────
 interface ReactionPickerProps {
@@ -59,7 +91,7 @@ function ReactionPicker({ onSelect, onClose, position }: ReactionPickerProps) {
       ref={ref}
       className="fixed z-50 flex gap-1 p-1.5 rounded-2xl"
       style={{
-        left: Math.min(position.x, window.innerWidth - 200),
+        left: Math.min(position.x, window.innerWidth - 260),
         top: Math.max(position.y - 56, 8),
         background: "white",
         boxShadow: "0 4px 24px rgba(0,0,0,0.15)",
@@ -88,6 +120,111 @@ function ReactionPicker({ onSelect, onClose, position }: ReactionPickerProps) {
   );
 }
 
+// ─── Context Menu ─────────────────────────────────────────────────────────────
+interface MessageContextMenuProps {
+  position: { x: number; y: number };
+  isMine: boolean;
+  onReact: () => void;
+  onReply: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onClose: () => void;
+}
+
+function MessageContextMenu({
+  position,
+  isMine,
+  onReact,
+  onReply,
+  onEdit,
+  onDelete,
+  onClose,
+}: MessageContextMenuProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [onClose]);
+
+  const menuStyle: React.CSSProperties = {
+    left: Math.min(position.x, window.innerWidth - 180),
+    top: Math.max(position.y - 8, 8),
+    background: "white",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+    border: "1.5px solid oklch(0.92 0.04 88)",
+    borderRadius: "16px",
+    padding: "6px",
+    minWidth: 160,
+    zIndex: 51,
+  };
+
+  return (
+    <div ref={ref} className="fixed" style={menuStyle}>
+      <button
+        type="button"
+        onClick={() => {
+          onReact();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium hover:bg-yellow-50 transition-colors text-left"
+        style={{ color: "oklch(0.38 0.08 65)" }}
+      >
+        😊 React
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onReply();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium hover:bg-yellow-50 transition-colors text-left"
+        style={{ color: "oklch(0.38 0.08 65)" }}
+      >
+        <Reply className="w-3.5 h-3.5" /> Reply
+      </button>
+      {isMine && onEdit && (
+        <button
+          type="button"
+          onClick={() => {
+            onEdit();
+            onClose();
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium hover:bg-yellow-50 transition-colors text-left"
+          style={{ color: "oklch(0.38 0.08 65)" }}
+        >
+          <Pencil className="w-3.5 h-3.5" /> Edit
+        </button>
+      )}
+      {isMine && onDelete && (
+        <button
+          type="button"
+          onClick={() => {
+            onDelete();
+            onClose();
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors text-left"
+          style={{ color: "oklch(0.5 0.18 25)" }}
+        >
+          <Trash2 className="w-3.5 h-3.5" /> Delete for Everyone
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Secret countdown helper ──────────────────────────────────────────────────
 function useSecretCountdown(
   msgId: string,
@@ -101,7 +238,6 @@ function useSecretCountdown(
   useEffect(() => {
     if (!isSecret) return;
 
-    // Check if already removed
     const secrets = getSecretMessages(convId);
     if (!secrets.has(msgId)) return;
 
@@ -112,7 +248,7 @@ function useSecretCountdown(
     if (storedStart) {
       startTime = Number.parseInt(storedStart, 10);
     } else {
-      if (!isMine) return; // only sender starts timer
+      if (!isMine) return;
       startTime = Date.now();
       localStorage.setItem(startKey, String(startTime));
     }
@@ -141,15 +277,17 @@ function useSecretCountdown(
   return { expired, secondsLeft };
 }
 
-// ─── Single message component ─────────────────────────────────────────────────
+// ─── Message Bubble ───────────────────────────────────────────────────────────
 interface MessageBubbleProps {
-  msg: MessagePreview;
+  msg: MessageView;
   isMine: boolean;
   isOptimistic: boolean;
   showSenderName: boolean;
   convId: string;
   onReactionAdd: (msgId: string, emoji: string) => void;
   onDelete: (msgId: string) => void;
+  onEdit: (msgId: string, currentContent: string) => void;
+  onReply: (msgId: string, preview: string) => void;
   reactions: ReactionsMap;
   isDeleted: boolean;
   isSecret: boolean;
@@ -163,14 +301,20 @@ function MessageBubble({
   convId,
   onReactionAdd,
   onDelete,
+  onEdit,
+  onReply,
   reactions,
   isDeleted,
   isSecret,
 }: MessageBubbleProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
   const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
-  const [hovered, setHovered] = useState(false);
+  const [contextPos, setContextPos] = useState({ x: 0, y: 0 });
+  const [swipeX, setSwipeX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartX = useRef<number>(0);
   const bubbleRef = useRef<HTMLDivElement>(null);
 
   const { expired, secondsLeft } = useSecretCountdown(
@@ -180,12 +324,12 @@ function MessageBubble({
     isMine,
   );
 
-  // Long press support
+  // Long press for context menu
   function handlePointerDown(e: React.PointerEvent) {
     const { clientX, clientY } = e;
     longPressTimer.current = setTimeout(() => {
-      setPickerPos({ x: clientX, y: clientY });
-      setShowReactionPicker(true);
+      setContextPos({ x: clientX, y: clientY });
+      setShowContextMenu(true);
     }, 500);
   }
 
@@ -195,18 +339,41 @@ function MessageBubble({
 
   function handleContextMenu(e: React.MouseEvent) {
     e.preventDefault();
-    setPickerPos({ x: e.clientX, y: e.clientY });
-    setShowReactionPicker(true);
+    setContextPos({ x: e.clientX, y: e.clientY });
+    setShowContextMenu(true);
   }
 
-  // Cleanup on unmount
+  // Swipe to reply (touch)
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+    setIsSwiping(false);
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    const dx = e.touches[0].clientX - touchStartX.current;
+    if (dx > 10) {
+      setIsSwiping(true);
+      setSwipeX(Math.min(dx, 80));
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    }
+  }
+
+  function handleTouchEnd() {
+    if (isSwiping && swipeX > 60) {
+      onReply(msg.id, msg.content.slice(0, 60));
+    }
+    setSwipeX(0);
+    setIsSwiping(false);
+  }
+
   useEffect(() => {
     return () => {
       if (longPressTimer.current) clearTimeout(longPressTimer.current);
     };
   }, []);
 
-  if (isDeleted) {
+  // Deleted state
+  if (isDeleted || msg.deleted) {
     return (
       <div className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
         <div
@@ -216,22 +383,28 @@ function MessageBubble({
             color: "oklch(0.55 0.04 68)",
           }}
         >
-          🗑️ Message deleted
+          🗑️ This message was deleted
         </div>
       </div>
     );
   }
 
-  const reactionEntries = Object.entries(reactions).filter(
+  const backendReactions = parseReactions(msg.reactions ?? "{}");
+  const mergedReactions = mergeReactions(reactions, backendReactions);
+  const reactionEntries = Object.entries(mergedReactions).filter(
     ([, count]) => count > 0,
   );
 
   return (
     <div
       className={`flex flex-col ${isMine ? "items-end" : "items-start"} animate-fade-in`}
-      style={{ animationDelay: "0s" }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      style={{
+        transform: `translateX(${isSwiping ? (isMine ? -swipeX : swipeX) : 0}px)`,
+        transition: isSwiping ? "none" : "transform 0.2s ease-out",
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {showSenderName && (
         <span
@@ -243,12 +416,26 @@ function MessageBubble({
       )}
 
       <div className="relative flex items-end gap-1.5">
-        {/* Delete button for own messages */}
-        {isMine && hovered && !isOptimistic && (
+        {/* Reply indicator during swipe */}
+        {isSwiping && swipeX > 30 && (
+          <div
+            className="absolute flex items-center justify-center w-7 h-7 rounded-full"
+            style={{
+              background: "oklch(0.72 0.155 68)",
+              [isMine ? "right" : "left"]: -36,
+              opacity: Math.min(1, (swipeX - 30) / 30),
+            }}
+          >
+            <Reply className="w-3.5 h-3.5 text-white" />
+          </div>
+        )}
+
+        {/* Delete button for own messages (hover) */}
+        {isMine && !isOptimistic && (
           <button
             type="button"
             onClick={() => onDelete(msg.id)}
-            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
+            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 opacity-0 group-hover:opacity-100"
             style={{
               background: "oklch(0.95 0.02 25)",
               color: "oklch(0.55 0.15 25)",
@@ -260,10 +447,10 @@ function MessageBubble({
           </button>
         )}
 
-        {/* The bubble */}
+        {/* Bubble */}
         <div
           ref={bubbleRef}
-          className={`max-w-[75%] px-4 py-2.5 transition-opacity duration-300 relative overflow-hidden ${
+          className={`max-w-[75%] px-4 py-2.5 transition-opacity duration-300 relative overflow-hidden group ${
             isMine ? "chat-bubble-sent" : "chat-bubble-received"
           } ${isOptimistic ? "opacity-60" : "opacity-100"}`}
           style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)", cursor: "default" }}
@@ -272,6 +459,25 @@ function MessageBubble({
           onPointerLeave={handlePointerUp}
           onContextMenu={handleContextMenu}
         >
+          {/* Reply preview */}
+          {msg.replyToId && msg.replyPreview && (
+            <div
+              className="rounded-xl px-3 py-1.5 mb-2 text-xs border-l-[3px]"
+              style={{
+                background: isMine
+                  ? "rgba(255,255,255,0.4)"
+                  : "rgba(0,0,0,0.05)",
+                borderColor: "oklch(0.72 0.155 68)",
+                color: "oklch(0.5 0.06 65)",
+              }}
+            >
+              <span className="font-semibold">↩️ </span>
+              {msg.replyPreview.length > 50
+                ? `${msg.replyPreview.slice(0, 50)}…`
+                : msg.replyPreview}
+            </div>
+          )}
+
           {/* Secret message overlay */}
           {isSecret && (
             <div className="flex items-center gap-1.5 mb-1">
@@ -288,6 +494,7 @@ function MessageBubble({
             </div>
           )}
 
+          {/* Message content by type */}
           {isSecret && expired ? (
             <p
               className="text-sm italic"
@@ -295,6 +502,28 @@ function MessageBubble({
             >
               🔒 This message has disappeared
             </p>
+          ) : msg.messageType === "image" || msg.messageType === "gif" ? (
+            <img
+              src={msg.content}
+              alt={msg.messageType === "gif" ? "GIF" : "Image"}
+              className="max-w-full rounded-xl"
+              style={{ maxHeight: 240, objectFit: "cover" }}
+              loading="lazy"
+            />
+          ) : msg.messageType === "voice" ? (
+            <div
+              className="flex items-center gap-3 py-1"
+              style={{ minWidth: 160 }}
+            >
+              <span className="text-xl">🎙️</span>
+              {/* biome-ignore lint/a11y/useMediaCaption: voice messages are user-recorded, no captions available */}
+              <audio
+                controls
+                src={msg.content}
+                className="h-8"
+                style={{ maxWidth: 180 }}
+              />
+            </div>
           ) : (
             <p
               className="text-sm leading-relaxed break-words"
@@ -304,6 +533,16 @@ function MessageBubble({
             >
               {msg.content}
             </p>
+          )}
+
+          {/* Edited label */}
+          {msg.edited && (
+            <span
+              className="text-xs italic opacity-60 block mt-0.5"
+              style={{ color: "oklch(0.55 0.04 65)" }}
+            >
+              (edited)
+            </span>
           )}
 
           {/* Secret countdown bar */}
@@ -358,6 +597,273 @@ function MessageBubble({
           position={pickerPos}
         />
       )}
+
+      {/* Context menu */}
+      {showContextMenu && (
+        <MessageContextMenu
+          position={contextPos}
+          isMine={isMine}
+          onReact={() => {
+            setPickerPos(contextPos);
+            setShowReactionPicker(true);
+          }}
+          onReply={() => onReply(msg.id, msg.content.slice(0, 60))}
+          onEdit={
+            isMine && !isOptimistic
+              ? () => onEdit(msg.id, msg.content)
+              : undefined
+          }
+          onDelete={
+            isMine && !isOptimistic ? () => onDelete(msg.id) : undefined
+          }
+          onClose={() => setShowContextMenu(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Attachment Menu ──────────────────────────────────────────────────────────
+interface AttachmentMenuProps {
+  onImage: () => void;
+  onGif: () => void;
+  onVoice: () => void;
+  onClose: () => void;
+}
+
+function AttachmentMenu({
+  onImage,
+  onGif,
+  onVoice,
+  onClose,
+}: AttachmentMenuProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute bottom-full mb-2 left-0 flex flex-col gap-1.5 p-2 rounded-2xl animate-scale-in"
+      style={{
+        background: "white",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+        border: "1.5px solid oklch(0.92 0.04 88)",
+        zIndex: 40,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          onImage();
+          onClose();
+        }}
+        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-yellow-50 transition-colors"
+        style={{ color: "oklch(0.38 0.08 65)", whiteSpace: "nowrap" }}
+      >
+        📷 Image / Video
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onGif();
+          onClose();
+        }}
+        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-yellow-50 transition-colors"
+        style={{ color: "oklch(0.38 0.08 65)", whiteSpace: "nowrap" }}
+      >
+        🎞️ GIF
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onVoice();
+          onClose();
+        }}
+        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-yellow-50 transition-colors"
+        style={{ color: "oklch(0.38 0.08 65)", whiteSpace: "nowrap" }}
+      >
+        🎙️ Voice
+      </button>
+    </div>
+  );
+}
+
+// ─── GIF URL Input ────────────────────────────────────────────────────────────
+interface GifInputProps {
+  onSend: (url: string) => void;
+  onClose: () => void;
+}
+
+function GifInput({ onSend, onClose }: GifInputProps) {
+  const [url, setUrl] = useState("");
+
+  return (
+    <div
+      className="flex items-center gap-2 p-2 rounded-2xl mb-2"
+      style={{
+        background: "oklch(0.96 0.04 90)",
+        border: "1.5px solid oklch(0.88 0.06 85)",
+      }}
+    >
+      <span className="text-base">🎞️</span>
+      <input
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="Paste GIF URL…"
+        className="flex-1 bg-transparent text-sm outline-none"
+        style={{ color: "oklch(0.38 0.08 65)" }}
+        // biome-ignore lint/a11y/noAutofocus: intentional for GIF input
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && url.trim()) {
+            onSend(url.trim());
+          }
+          if (e.key === "Escape") onClose();
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => url.trim() && onSend(url.trim())}
+        disabled={!url.trim()}
+        className="px-3 py-1 rounded-xl text-xs font-bold disabled:opacity-40 transition-opacity"
+        style={{ background: "oklch(0.72 0.155 68)", color: "white" }}
+      >
+        Send
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10"
+        aria-label="Cancel GIF"
+      >
+        <X className="w-3.5 h-3.5" style={{ color: "oklch(0.55 0.06 65)" }} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Voice Recorder ───────────────────────────────────────────────────────────
+interface VoiceRecorderProps {
+  onSend: (dataUrl: string) => void;
+  onClose: () => void;
+}
+
+function VoiceRecorder({ onSend, onClose }: VoiceRecorderProps) {
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === "string") {
+            onSend(reader.result);
+          }
+        };
+        reader.readAsDataURL(blob);
+        // Stop all tracks
+        for (const track of stream.getTracks()) track.stop();
+      };
+
+      mr.start();
+      setRecording(true);
+      setSeconds(0);
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    } catch {
+      toast.error("Microphone access denied");
+      onClose();
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop();
+      if (timerRef.current) clearInterval(timerRef.current);
+      setRecording(false);
+    }
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount only
+  useEffect(() => {
+    void startRecording();
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      className="flex items-center gap-3 p-2 rounded-2xl mb-2"
+      style={{
+        background: "oklch(0.96 0.04 90)",
+        border: "1.5px solid oklch(0.88 0.06 85)",
+      }}
+    >
+      <span className="text-base">🎙️</span>
+      <div
+        className="flex items-center gap-1.5 flex-1"
+        style={{
+          color: recording ? "oklch(0.55 0.18 25)" : "oklch(0.5 0.06 65)",
+        }}
+      >
+        {recording && (
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: "oklch(0.55 0.18 25)",
+              animation: "ping 1s ease-in-out infinite",
+            }}
+          />
+        )}
+        <span className="text-sm font-semibold">
+          {recording ? `Recording… ${seconds}s` : "Starting…"}
+        </span>
+      </div>
+      {recording && (
+        <button
+          type="button"
+          onClick={stopRecording}
+          className="px-3 py-1 rounded-xl text-xs font-bold"
+          style={{ background: "oklch(0.72 0.155 68)", color: "white" }}
+        >
+          Send
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onClose}
+        className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10"
+        aria-label="Cancel recording"
+      >
+        <X className="w-3.5 h-3.5" style={{ color: "oklch(0.55 0.06 65)" }} />
+      </button>
     </div>
   );
 }
@@ -382,6 +888,20 @@ export default function ChatScreen() {
   const [reactionsVersion, setReactionsVersion] = useState(0);
   const [deletedVersion, setDeletedVersion] = useState(0);
 
+  // Reply state
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [replyPreview, setReplyPreview] = useState<string | null>(null);
+
+  // Edit state
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
+  // Attachment state
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showGifInput, setShowGifInput] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
@@ -392,11 +912,10 @@ export default function ChatScreen() {
   const currentUserId = profile?.id ?? "";
   const currentUserName = profile?.username ?? "";
 
-  // Mood ring for current user's avatar (not shown in this screen but useful context)
   const mood = getMood(currentUserId);
   const moodRingStyle = getMoodRingStyle(mood);
 
-  const { data: messages = [], isLoading } = useQuery<MessagePreview[]>({
+  const { data: messages = [], isLoading } = useQuery<MessageView[]>({
     queryKey: ["messages", sessionId, convId],
     queryFn: async () => {
       if (!actor || !sessionId || !convId) return [];
@@ -406,12 +925,45 @@ export default function ChatScreen() {
     refetchInterval: 1500,
   });
 
-  // Sort messages by timestamp ascending
+  // Track previous messages to detect new incoming messages for sound
+  const prevMessageCountRef = useRef(0);
+  const prevLastMsgIdRef = useRef<string>("");
+
+  useEffect(() => {
+    if (
+      messages.length > prevMessageCountRef.current &&
+      prevMessageCountRef.current > 0
+    ) {
+      const sorted = [...messages].sort((a, b) =>
+        Number(a.timestamp - b.timestamp),
+      );
+      const latest = sorted[sorted.length - 1];
+      if (
+        latest &&
+        latest.id !== prevLastMsgIdRef.current &&
+        latest.senderId !== currentUserId
+      ) {
+        playReceiveSound();
+        prevLastMsgIdRef.current = latest.id;
+      }
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages, currentUserId]);
+
+  // Update last seen on mount + every 30s
+  useEffect(() => {
+    if (!actor || !sessionId) return;
+    void actor.updateLastSeen(sessionId);
+    const interval = setInterval(() => {
+      void actor.updateLastSeen(sessionId);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [actor, sessionId]);
+
   const sortedMessages = [...messages].sort((a, b) =>
     Number(a.timestamp - b.timestamp),
   );
 
-  // Get sets (re-computed when versions change)
   const deletedSet = getDeletedMessages(convId);
   const secretSet = getSecretMessages(convId);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -419,7 +971,6 @@ export default function ChatScreen() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _deletedV = deletedVersion;
 
-  // ── Smart auto-scroll ──────────────────────────────────────────────────────
   const isNearBottom = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return true;
@@ -444,7 +995,6 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, scrollToBottom]);
 
-  // Typing indicator
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     setMessageText(e.target.value);
     setIsTyping(e.target.value.length > 0);
@@ -454,25 +1004,41 @@ export default function ChatScreen() {
     }
   }
 
-  // Cleanup typing timer
   useEffect(() => {
     return () => {
       if (typingTimer.current) clearTimeout(typingTimer.current);
     };
   }, []);
 
-  // ── Send with optimistic update ────────────────────────────────────────────
-  const sendMessage = useMutation({
-    mutationFn: async (content: string) => {
+  // ── Send mutation ──────────────────────────────────────────────────────────
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({
+      content,
+      replyId,
+      replyPrev,
+      msgType,
+    }: {
+      content: string;
+      replyId: string | null;
+      replyPrev: string | null;
+      msgType: string;
+    }) => {
       if (!actor || !sessionId || !convId) throw new Error("Not ready");
-      await actor.sendMessage(sessionId, convId, content);
+      await actor.sendMessage(
+        sessionId,
+        convId,
+        content,
+        replyId,
+        replyPrev,
+        msgType,
+      );
     },
-    onMutate: async (content: string) => {
+    onMutate: async ({ content, replyId, replyPrev, msgType }) => {
       await queryClient.cancelQueries({
         queryKey: ["messages", sessionId, convId],
       });
 
-      const previousMessages = queryClient.getQueryData<MessagePreview[]>([
+      const previousMessages = queryClient.getQueryData<MessageView[]>([
         "messages",
         sessionId,
         convId,
@@ -480,27 +1046,32 @@ export default function ChatScreen() {
 
       const optimisticId = `optimistic-${Date.now()}`;
 
-      const optimisticMessage: MessagePreview = {
+      const optimisticMessage: MessageView = {
         id: optimisticId,
         content,
         senderId: currentUserId,
         senderName: currentUserName,
         timestamp: BigInt(Date.now()) * 1_000_000n,
+        edited: false,
+        deleted: false,
+        replyToId: replyId ?? undefined,
+        replyPreview: replyPrev ?? undefined,
+        messageType: msgType,
+        reactions: "{}",
       };
 
-      queryClient.setQueryData<MessagePreview[]>(
+      queryClient.setQueryData<MessageView[]>(
         ["messages", sessionId, convId],
         (old) => [...(old ?? []), optimisticMessage],
       );
 
-      // If secret mode, track this message as secret
       if (isSecretMode && convId) {
         addSecretMessage(convId, optimisticId);
       }
 
       return { previousMessages, optimisticId };
     },
-    onError: (_err, _content, context) => {
+    onError: (_err, _vars, context) => {
       if (context?.previousMessages !== undefined) {
         queryClient.setQueryData(
           ["messages", sessionId, convId],
@@ -508,8 +1079,7 @@ export default function ChatScreen() {
         );
       }
     },
-    onSuccess: (_data, _content, context) => {
-      // Add XP for sending a message
+    onSuccess: (_data, _vars, _context) => {
       const userId = profile?.id;
       if (userId) {
         const oldXp = Number.parseInt(
@@ -526,14 +1096,6 @@ export default function ChatScreen() {
         }
       }
 
-      // If we had an optimistic secret message, we need to migrate the key
-      // to the real message ID — but since we don't get the real ID back easily,
-      // just leave the optimistic entry (it will countdown from when it was created)
-      if (isSecretMode && context?.optimisticId && convId) {
-        // Secret message tracking stays on optimistic ID until real messages load
-        // The 10s countdown starts from when the message was sent
-      }
-
       queryClient.invalidateQueries({
         queryKey: ["messages", sessionId, convId],
       });
@@ -542,21 +1104,94 @@ export default function ChatScreen() {
     },
   });
 
-  const handleSend = async () => {
-    const text = messageText.trim();
+  // ── Edit mutation ──────────────────────────────────────────────────────────
+  const editMessageMutation = useMutation({
+    mutationFn: async ({
+      msgId,
+      newContent,
+    }: { msgId: string; newContent: string }) => {
+      if (!actor || !sessionId || !convId) throw new Error("Not ready");
+      await actor.editMessage(sessionId, convId, msgId, newContent);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["messages", sessionId, convId],
+      });
+      setEditingMsgId(null);
+      setEditText("");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to edit message");
+    },
+  });
+
+  // ── Delete mutation ────────────────────────────────────────────────────────
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (msgId: string) => {
+      if (!actor || !sessionId || !convId) throw new Error("Not ready");
+      await actor.deleteMessageForEveryone(sessionId, convId, msgId);
+    },
+    onMutate: async (msgId) => {
+      // Optimistic local delete
+      addDeletedMessage(convId, msgId);
+      setDeletedVersion((v) => v + 1);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["messages", sessionId, convId],
+      });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to delete message");
+    },
+  });
+
+  // ── React mutation ─────────────────────────────────────────────────────────
+  const reactMutation = useMutation({
+    mutationFn: async ({ msgId, emoji }: { msgId: string; emoji: string }) => {
+      if (!actor || !sessionId || !convId) return;
+      await actor.reactToMessage(sessionId, convId, msgId, emoji);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["messages", sessionId, convId],
+      });
+    },
+  });
+
+  async function handleSend(
+    content?: string,
+    msgType = "text",
+    replyId: string | null = null,
+    replyPrev: string | null = null,
+  ) {
+    const text = (content ?? messageText).trim();
     if (!text || isSending) return;
 
-    setMessageText("");
-    setIsTyping(false);
+    if (!content) {
+      setMessageText("");
+      setIsTyping(false);
+    }
+    setReplyToId(null);
+    setReplyPreview(null);
+
     setIsSending(true);
-    if (isSecretMode) setIsSecretMode(false); // Reset after send
+    if (isSecretMode) setIsSecretMode(false);
+
+    playSendSound();
+
     try {
-      await sendMessage.mutateAsync(text);
+      await sendMessageMutation.mutateAsync({
+        content: text,
+        replyId: replyId ?? replyToId,
+        replyPrev: replyPrev ?? replyPreview,
+        msgType,
+      });
     } finally {
       setIsSending(false);
-      inputRef.current?.focus();
+      if (!content) inputRef.current?.focus();
     }
-  };
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -569,14 +1204,37 @@ export default function ChatScreen() {
     if (convId) {
       addReaction(convId, msgId, emoji);
       setReactionsVersion((v) => v + 1);
+      reactMutation.mutate({ msgId, emoji });
     }
   }
 
   function handleDeleteMessage(msgId: string) {
-    if (convId) {
-      addDeletedMessage(convId, msgId);
-      setDeletedVersion((v) => v + 1);
-    }
+    deleteMessageMutation.mutate(msgId);
+  }
+
+  function handleEditMessage(msgId: string, currentContent: string) {
+    setEditingMsgId(msgId);
+    setEditText(currentContent);
+  }
+
+  function handleReplyTo(msgId: string, preview: string) {
+    setReplyToId(msgId);
+    setReplyPreview(preview);
+    inputRef.current?.focus();
+  }
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        void handleSend(reader.result, "image");
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   }
 
   const participantColorClass = getAvatarColor(participantName);
@@ -606,14 +1264,12 @@ export default function ChatScreen() {
             />
           </button>
 
-          {/* Participant Avatar */}
           <div
             className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${participantColorClass}`}
           >
             {participantInitials}
           </div>
 
-          {/* Name + status */}
           <div className="flex-1 min-w-0">
             <h1
               className="font-bold text-base truncate"
@@ -663,7 +1319,6 @@ export default function ChatScreen() {
             </p>
           </div>
 
-          {/* Current user avatar with mood ring */}
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(currentUserName)}`}
             style={moodRingStyle}
@@ -727,9 +1382,91 @@ export default function ChatScreen() {
                 const prevMsg = index > 0 ? sortedMessages[index - 1] : null;
                 const showSenderName =
                   !isMine && (!prevMsg || prevMsg.senderId !== msg.senderId);
-                const isDeleted = deletedSet.has(msg.id);
+                const isDeleted = deletedSet.has(msg.id) || msg.deleted;
                 const isSecret = secretSet.has(msg.id);
-                const reactions = getReactions(convId, msg.id);
+                const localReactions = getReactions(convId, msg.id);
+
+                // Inline edit mode
+                if (editingMsgId === msg.id && isMine) {
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
+                    >
+                      <div className="max-w-[75%] w-full">
+                        <div
+                          className="flex items-center gap-2 p-2 rounded-2xl"
+                          style={{
+                            background: "oklch(0.97 0.04 90)",
+                            border: "1.5px solid oklch(0.82 0.1 85)",
+                          }}
+                        >
+                          <Pencil
+                            className="w-3.5 h-3.5 flex-shrink-0"
+                            style={{ color: "oklch(0.65 0.1 70)" }}
+                          />
+                          <input
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            className="flex-1 bg-transparent text-sm outline-none"
+                            style={{ color: "oklch(0.38 0.08 65)" }}
+                            // biome-ignore lint/a11y/noAutofocus: intentional for edit input
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                editMessageMutation.mutate({
+                                  msgId: msg.id,
+                                  newContent: editText.trim(),
+                                });
+                              }
+                              if (e.key === "Escape") {
+                                setEditingMsgId(null);
+                                setEditText("");
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              editMessageMutation.mutate({
+                                msgId: msg.id,
+                                newContent: editText.trim(),
+                              })
+                            }
+                            className="px-2.5 py-1 rounded-xl text-xs font-bold"
+                            style={{
+                              background: "oklch(0.72 0.155 68)",
+                              color: "white",
+                            }}
+                            disabled={editMessageMutation.isPending}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMsgId(null);
+                              setEditText("");
+                            }}
+                            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10"
+                            aria-label="Cancel edit"
+                          >
+                            <X
+                              className="w-3.5 h-3.5"
+                              style={{ color: "oklch(0.55 0.06 65)" }}
+                            />
+                          </button>
+                        </div>
+                        <p
+                          className="text-xs mt-1 px-1"
+                          style={{ color: "oklch(0.65 0.06 70)" }}
+                        >
+                          Press Enter to save, Esc to cancel
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <MessageBubble
@@ -741,7 +1478,9 @@ export default function ChatScreen() {
                     convId={convId}
                     onReactionAdd={handleReactionAdd}
                     onDelete={handleDeleteMessage}
-                    reactions={reactions}
+                    onEdit={handleEditMessage}
+                    onReply={handleReplyTo}
+                    reactions={localReactions}
                     isDeleted={isDeleted}
                     isSecret={isSecret}
                   />
@@ -761,7 +1500,102 @@ export default function ChatScreen() {
             borderColor: "oklch(var(--border))",
           }}
         >
-          <div className="flex items-center gap-2">
+          {/* Reply bar */}
+          {replyToId && replyPreview && (
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-2xl mb-2"
+              style={{
+                background: "oklch(0.96 0.04 90)",
+                border: "1.5px solid oklch(0.88 0.06 85)",
+                borderLeft: "3px solid oklch(0.72 0.155 68)",
+              }}
+            >
+              <Reply
+                className="w-3.5 h-3.5 flex-shrink-0"
+                style={{ color: "oklch(0.72 0.155 68)" }}
+              />
+              <p
+                className="text-xs flex-1 truncate"
+                style={{ color: "oklch(0.5 0.06 65)" }}
+              >
+                <span
+                  className="font-semibold"
+                  style={{ color: "oklch(0.45 0.1 68)" }}
+                >
+                  Replying:{" "}
+                </span>
+                {replyPreview}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyToId(null);
+                  setReplyPreview(null);
+                }}
+                className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-black/10"
+                aria-label="Cancel reply"
+              >
+                <X
+                  className="w-3 h-3"
+                  style={{ color: "oklch(0.55 0.06 65)" }}
+                />
+              </button>
+            </div>
+          )}
+
+          {/* GIF input */}
+          {showGifInput && (
+            <GifInput
+              onSend={(url) => {
+                setShowGifInput(false);
+                void handleSend(url, "gif");
+              }}
+              onClose={() => setShowGifInput(false)}
+            />
+          )}
+
+          {/* Voice recorder */}
+          {showVoiceRecorder && (
+            <VoiceRecorder
+              onSend={(dataUrl) => {
+                setShowVoiceRecorder(false);
+                void handleSend(dataUrl, "voice");
+              }}
+              onClose={() => setShowVoiceRecorder(false)}
+            />
+          )}
+
+          <div className="flex items-center gap-2 relative">
+            {/* Attachment button */}
+            <div className="relative flex-shrink-0">
+              {showAttachMenu && (
+                <AttachmentMenu
+                  onImage={() => imageInputRef.current?.click()}
+                  onGif={() => setShowGifInput(true)}
+                  onVoice={() => setShowVoiceRecorder(true)}
+                  onClose={() => setShowAttachMenu(false)}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setShowAttachMenu((v) => !v)}
+                className="w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 transition-all duration-200 active:scale-90"
+                style={{
+                  background: showAttachMenu
+                    ? "oklch(0.72 0.155 68)"
+                    : "oklch(0.92 0.04 88)",
+                }}
+                aria-label="Attach file"
+              >
+                <Paperclip
+                  className="w-4 h-4"
+                  style={{
+                    color: showAttachMenu ? "white" : "oklch(0.65 0.08 70)",
+                  }}
+                />
+              </button>
+            </div>
+
             {/* Secret mode toggle */}
             <button
               type="button"
@@ -776,9 +1610,7 @@ export default function ChatScreen() {
                   : "none",
               }}
               aria-label={
-                isSecretMode
-                  ? "Secret mode on — message will disappear"
-                  : "Toggle secret message mode"
+                isSecretMode ? "Secret mode on" : "Toggle secret mode"
               }
               title={
                 isSecretMode ? "Secret mode ON (10s timer)" : "Secret mode OFF"
@@ -837,7 +1669,6 @@ export default function ChatScreen() {
             </button>
           </div>
 
-          {/* Secret mode indicator */}
           {isSecretMode && (
             <p
               className="text-xs mt-1.5 text-center"
@@ -849,10 +1680,24 @@ export default function ChatScreen() {
         </footer>
       </div>
 
+      {/* Hidden image input */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*,video/*"
+        className="sr-only"
+        onChange={handleImageSelect}
+        tabIndex={-1}
+      />
+
       <style>{`
         @keyframes typingDot {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
           30% { transform: translateY(-4px); opacity: 1; }
+        }
+        @keyframes ping {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
         }
       `}</style>
     </div>

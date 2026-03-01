@@ -5,15 +5,18 @@ import {
   LogOut,
   MessageCircle,
   Moon,
+  Pin,
+  Radio,
   RefreshCw,
   Sun,
   UserMinus,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { ConversationView, Message } from "../backend.d";
+import type { ConversationView, MessageView } from "../backend.d";
 import DailySurpriseModal from "../components/DailySurpriseModal";
 import ProfileModal from "../components/ProfileModal";
 import { useApp } from "../context/AppContext";
@@ -35,6 +38,10 @@ import {
   setDailySurpriseShown,
   setDarkMode,
 } from "../utils/localFeatures";
+import {
+  playFriendAddSound,
+  playFriendRemoveSound,
+} from "../utils/soundEffects";
 
 // ─── Unread badge tracking ────────────────────────────────────────────────────
 type UnreadMap = Record<string, number>;
@@ -45,9 +52,19 @@ function getParticipantInfo(
   conversation: ConversationView,
   currentUserId: string,
 ): { name: string; id: string } {
+  // If it's a group, return group name
+  if (conversation.isGroup) {
+    return {
+      name:
+        conversation.groupName ??
+        `Group (${conversation.participantIds.length})`,
+      id: conversation.id,
+    };
+  }
+
   const otherMsg = [...conversation.messages]
     .reverse()
-    .find((m: Message) => m.senderId !== currentUserId);
+    .find((m: MessageView) => m.senderId !== currentUserId);
   if (otherMsg) return { name: otherMsg.senderName, id: otherMsg.senderId };
 
   const myMsg = conversation.messages[0];
@@ -58,7 +75,7 @@ function getParticipantInfo(
   return { name: "Unknown", id: conversation.id };
 }
 
-function getLastMessage(conversation: ConversationView): Message | null {
+function getLastMessage(conversation: ConversationView): MessageView | null {
   if (!conversation.messages.length) return null;
   return [...conversation.messages].sort((a, b) =>
     Number(b.timestamp - a.timestamp),
@@ -69,6 +86,7 @@ function isCloseFriend(
   conversation: ConversationView,
   currentUserId: string,
 ): boolean {
+  if (conversation.isGroup) return false;
   const msgs = conversation.messages;
   if (msgs.length <= 20) return false;
   const hasMine = msgs.some((m) => m.senderId === currentUserId);
@@ -245,10 +263,7 @@ function AddFriendModal({ myCode, onAdd, onClose }: AddFriendModalProps) {
               type="button"
               onClick={copyMyCode}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 hover:opacity-80 active:scale-95"
-              style={{
-                background: "oklch(0.72 0.155 68)",
-                color: "white",
-              }}
+              style={{ background: "oklch(0.72 0.155 68)", color: "white" }}
             >
               {codeCopied ? (
                 <>
@@ -265,7 +280,6 @@ function AddFriendModal({ myCode, onAdd, onClose }: AddFriendModalProps) {
           </div>
         </div>
 
-        {/* Divider */}
         <div className="flex items-center gap-3 mb-4">
           <div
             className="flex-1 h-px"
@@ -280,7 +294,6 @@ function AddFriendModal({ myCode, onAdd, onClose }: AddFriendModalProps) {
           />
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
             <label
@@ -356,6 +369,392 @@ function AddFriendModal({ myCode, onAdd, onClose }: AddFriendModalProps) {
   );
 }
 
+// ─── Group Chat Modal ─────────────────────────────────────────────────────────
+
+interface GroupChatModalProps {
+  friends: FriendEntry[];
+  onClose: () => void;
+  onCreated: (convId: string, groupName: string) => void;
+  sessionId: string;
+}
+
+function GroupChatModal({
+  friends,
+  onClose,
+  onCreated,
+  sessionId,
+}: GroupChatModalProps) {
+  const { actor } = useActor();
+  const [groupName, setGroupName] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+
+  function toggleFriend(username: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(username)) next.delete(username);
+      else next.add(username);
+      return next;
+    });
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!actor || selected.size < 1 || !groupName.trim()) return;
+    setCreating(true);
+    try {
+      const convId = await actor.createGroupConversation(
+        sessionId,
+        groupName.trim(),
+        [...selected],
+      );
+      toast.success(`Group "${groupName}" created! 👥`);
+      onCreated(convId, groupName.trim());
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to create group",
+      );
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0 animate-fade-in"
+      style={{ background: "rgba(0,0,0,0.3)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-3xl p-6 animate-scale-in"
+        style={{
+          boxShadow: "0 16px 60px rgba(0,0,0,0.15)",
+          maxHeight: "85dvh",
+          overflowY: "auto",
+        }}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Users
+              className="w-5 h-5"
+              style={{ color: "oklch(0.72 0.155 68)" }}
+            />
+            <h2
+              className="text-lg font-bold"
+              style={{ color: "oklch(0.38 0.08 65)" }}
+            >
+              New Group Chat
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+          <div>
+            <label
+              htmlFor="group-name-input"
+              className="block text-sm font-semibold mb-1"
+              style={{ color: "oklch(0.5 0.08 65)" }}
+            >
+              Group name
+            </label>
+            <input
+              id="group-name-input"
+              type="text"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="e.g. Sunflower Squad 🌻"
+              required
+              className="sunflower-input w-full text-sm"
+              autoComplete="off"
+            />
+          </div>
+
+          <div>
+            <p
+              className="text-sm font-semibold mb-2"
+              style={{ color: "oklch(0.5 0.08 65)" }}
+            >
+              Select friends ({selected.size} selected)
+            </p>
+            {friends.length === 0 ? (
+              <p
+                className="text-xs text-center py-4"
+                style={{ color: "oklch(0.65 0.05 70)" }}
+              >
+                Add friends first to create a group
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
+                {friends.map((friend) => (
+                  <label
+                    key={friend.username}
+                    className="flex items-center gap-3 p-3 rounded-2xl cursor-pointer hover:bg-yellow-50 transition-colors"
+                    style={{
+                      background: selected.has(friend.username)
+                        ? "oklch(0.96 0.06 88)"
+                        : "transparent",
+                      border: selected.has(friend.username)
+                        ? "1.5px solid oklch(0.82 0.1 85)"
+                        : "1.5px solid transparent",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(friend.username)}
+                      onChange={() => toggleFriend(friend.username)}
+                      className="sr-only"
+                    />
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(friend.username)}`}
+                    >
+                      {getInitials(friend.username)}
+                    </div>
+                    <span
+                      className="flex-1 text-sm font-semibold truncate"
+                      style={{ color: "oklch(0.38 0.08 65)" }}
+                    >
+                      {friend.username}
+                    </span>
+                    <div
+                      className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all"
+                      style={{
+                        borderColor: selected.has(friend.username)
+                          ? "oklch(0.72 0.155 68)"
+                          : "oklch(0.82 0.06 85)",
+                        background: selected.has(friend.username)
+                          ? "oklch(0.72 0.155 68)"
+                          : "transparent",
+                      }}
+                    >
+                      {selected.has(friend.username) && (
+                        <Check className="w-3 h-3 text-white" />
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={creating || selected.size < 1 || !groupName.trim()}
+            className="sunflower-btn-primary w-full flex items-center justify-center gap-2"
+            style={{ background: "oklch(0.72 0.155 68)", color: "white" }}
+          >
+            {creating ? (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Users className="w-4 h-4" />
+            )}
+            Create Group
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Broadcast Modal ──────────────────────────────────────────────────────────
+
+interface BroadcastModalProps {
+  friends: FriendEntry[];
+  onClose: () => void;
+  sessionId: string;
+}
+
+function BroadcastModal({ friends, onClose, sessionId }: BroadcastModalProps) {
+  const { actor } = useActor();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+
+  function toggleFriend(username: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(username)) next.delete(username);
+      else next.add(username);
+      return next;
+    });
+  }
+
+  async function handleBroadcast(e: React.FormEvent) {
+    e.preventDefault();
+    if (!actor || selected.size < 1 || !message.trim()) return;
+    setSending(true);
+    try {
+      await actor.broadcastMessage(sessionId, [...selected], message.trim());
+      toast.success(`📢 Broadcast sent to ${selected.size} friends!`);
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to broadcast");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0 animate-fade-in"
+      style={{ background: "rgba(0,0,0,0.3)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-3xl p-6 animate-scale-in"
+        style={{
+          boxShadow: "0 16px 60px rgba(0,0,0,0.15)",
+          maxHeight: "85dvh",
+          overflowY: "auto",
+        }}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Radio
+              className="w-5 h-5"
+              style={{ color: "oklch(0.72 0.155 68)" }}
+            />
+            <h2
+              className="text-lg font-bold"
+              style={{ color: "oklch(0.38 0.08 65)" }}
+            >
+              Broadcast Message
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleBroadcast} className="flex flex-col gap-4">
+          <div>
+            <p
+              className="text-sm font-semibold mb-2"
+              style={{ color: "oklch(0.5 0.08 65)" }}
+            >
+              Select recipients ({selected.size} selected)
+            </p>
+            {friends.length === 0 ? (
+              <p
+                className="text-xs text-center py-4"
+                style={{ color: "oklch(0.65 0.05 70)" }}
+              >
+                Add friends first to broadcast
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+                {friends.map((friend) => (
+                  <label
+                    key={friend.username}
+                    className="flex items-center gap-3 p-3 rounded-2xl cursor-pointer hover:bg-yellow-50 transition-colors"
+                    style={{
+                      background: selected.has(friend.username)
+                        ? "oklch(0.96 0.06 88)"
+                        : "transparent",
+                      border: selected.has(friend.username)
+                        ? "1.5px solid oklch(0.82 0.1 85)"
+                        : "1.5px solid transparent",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(friend.username)}
+                      onChange={() => toggleFriend(friend.username)}
+                      className="sr-only"
+                    />
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(friend.username)}`}
+                    >
+                      {getInitials(friend.username)}
+                    </div>
+                    <span
+                      className="flex-1 text-sm font-semibold truncate"
+                      style={{ color: "oklch(0.38 0.08 65)" }}
+                    >
+                      {friend.username}
+                    </span>
+                    <div
+                      className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                      style={{
+                        borderColor: selected.has(friend.username)
+                          ? "oklch(0.72 0.155 68)"
+                          : "oklch(0.82 0.06 85)",
+                        background: selected.has(friend.username)
+                          ? "oklch(0.72 0.155 68)"
+                          : "transparent",
+                      }}
+                    >
+                      {selected.has(friend.username) && (
+                        <Check className="w-3 h-3 text-white" />
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="broadcast-message-input"
+              className="block text-sm font-semibold mb-1.5"
+              style={{ color: "oklch(0.5 0.08 65)" }}
+            >
+              Message
+            </label>
+            <textarea
+              id="broadcast-message-input"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type your broadcast message… 📢"
+              rows={3}
+              maxLength={500}
+              required
+              className="sunflower-input w-full text-sm resize-none"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={sending || selected.size < 1 || !message.trim()}
+            className="sunflower-btn-primary w-full flex items-center justify-center gap-2"
+            style={{ background: "oklch(0.72 0.155 68)", color: "white" }}
+          >
+            {sending ? (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Radio className="w-4 h-4" />
+            )}
+            Broadcast 📢
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 type ActiveTab = "chats" | "friends";
@@ -384,16 +783,30 @@ export default function ChatListScreen() {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showDailySurprise, setShowDailySurprise] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showBroadcast, setShowBroadcast] = useState(false);
   const [darkMode, setDarkModeState] = useState(() => getDarkMode());
 
-  // XP + level state (re-read on mount)
+  // XP + level state
   const [xp, setXpState] = useState(() => getXP(userId));
   const level = getXpLevel(xp);
 
   // Mood
   const [mood, setMoodState] = useState(() => getMood(userId));
 
-  // Apply dark mode on mount
+  // Pull to refresh
+  const [pullY, setPullY] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pullStartY = useRef<number>(0);
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  // Long press for pin
+  const [contextConvId, setContextConvId] = useState<string | null>(null);
+  const [contextPos, setContextPos] = useState({ x: 0, y: 0 });
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Apply dark mode
   useEffect(() => {
     if (darkMode) {
       document.documentElement.setAttribute("data-theme", "dark");
@@ -409,6 +822,16 @@ export default function ChatListScreen() {
       return () => clearTimeout(timer);
     }
   }, [userId]);
+
+  // Update last seen on mount + every 30s
+  useEffect(() => {
+    if (!actor || !sessionId) return;
+    void actor.updateLastSeen(sessionId);
+    const interval = setInterval(() => {
+      void actor.updateLastSeen(sessionId);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [actor, sessionId]);
 
   function handleToggleDarkMode() {
     const newVal = !darkMode;
@@ -434,7 +857,6 @@ export default function ChatListScreen() {
     refetchInterval: 4000,
   });
 
-  // Track unread counts whenever conversations update
   useEffect(() => {
     if (!conversations.length) return;
 
@@ -471,6 +893,27 @@ export default function ChatListScreen() {
     setUnreadCounts((prev) => ({ ...prev, [convId]: 0 }));
   }
 
+  // ── Pin conversation ───────────────────────────────────────────────────────
+  const pinMutation = useMutation({
+    mutationFn: async ({
+      convId,
+      pinned,
+    }: { convId: string; pinned: boolean }) => {
+      if (!actor || !sessionId) throw new Error("Not authenticated");
+      await actor.pinConversation(sessionId, convId, pinned);
+    },
+    onSuccess: (_, { pinned }) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations", sessionId] });
+      toast.success(
+        pinned ? "📌 Conversation pinned!" : "Conversation unpinned",
+      );
+      setContextConvId(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to pin conversation");
+    },
+  });
+
   const createConversation = useMutation({
     mutationFn: async (participantUsername: string) => {
       if (!actor || !sessionId) throw new Error("Not authenticated");
@@ -490,7 +933,10 @@ export default function ChatListScreen() {
     },
   });
 
+  // Sort: pinned first, then by last message time
   const sortedConversations = [...conversations].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
     const lastA = getLastMessage(a);
     const lastB = getLastMessage(b);
     if (!lastA && !lastB) return 0;
@@ -506,11 +952,13 @@ export default function ChatListScreen() {
   function handleAddFriend(entry: FriendEntry) {
     friendsHook.addFriend(entry);
     setFriendsVersion((v) => v + 1);
+    playFriendAddSound();
   }
 
   function handleRemoveFriend(username: string) {
     friendsHook.removeFriend(username);
     setFriendsVersion((v) => v + 1);
+    playFriendRemoveSound();
     toast.success(`${username} removed from friends`);
   }
 
@@ -524,11 +972,67 @@ export default function ChatListScreen() {
   }
 
   function handleProfileUpdated() {
-    // Re-read mood + XP after profile saved
     setMoodState(getMood(userId));
     setXpState(getXP(userId));
     setShowProfile(false);
   }
+
+  // ── Pull to refresh ────────────────────────────────────────────────────────
+  function handlePullTouchStart(e: React.TouchEvent) {
+    const scrollEl = mainRef.current;
+    if (!scrollEl || scrollEl.scrollTop > 0) return;
+    pullStartY.current = e.touches[0].clientY;
+    setIsPulling(true);
+  }
+
+  function handlePullTouchMove(e: React.TouchEvent) {
+    if (!isPulling) return;
+    const dy = e.touches[0].clientY - pullStartY.current;
+    if (dy > 0) setPullY(Math.min(dy, 100));
+  }
+
+  async function handlePullTouchEnd() {
+    if (pullY > 80) {
+      setIsRefreshing(true);
+      await refetch();
+      setIsRefreshing(false);
+    }
+    setPullY(0);
+    setIsPulling(false);
+  }
+
+  // ── Conversation long press for pin context menu ───────────────────────────
+  function handleConvPointerDown(e: React.PointerEvent, convId: string) {
+    const { clientX, clientY } = e;
+    longPressTimer.current = setTimeout(() => {
+      setContextConvId(convId);
+      setContextPos({ x: clientX, y: clientY });
+    }, 500);
+  }
+
+  function handleConvPointerUp() {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    };
+  }, []);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextConvId) return;
+    function handleClick() {
+      setContextConvId(null);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [contextConvId]);
+
+  const contextConv = contextConvId
+    ? conversations.find((c) => c.id === contextConvId)
+    : null;
 
   return (
     <div
@@ -559,7 +1063,35 @@ export default function ChatListScreen() {
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {/* Broadcast button */}
+              <button
+                type="button"
+                onClick={() => setShowBroadcast(true)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors"
+                aria-label="Broadcast message"
+                title="Broadcast message"
+              >
+                <Radio
+                  className="w-4 h-4"
+                  style={{ color: "oklch(0.65 0.08 70)" }}
+                />
+              </button>
+
+              {/* Group chat button */}
+              <button
+                type="button"
+                onClick={() => setShowGroupModal(true)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors"
+                aria-label="Create group chat"
+                title="New group chat"
+              >
+                <Users
+                  className="w-4 h-4"
+                  style={{ color: "oklch(0.65 0.08 70)" }}
+                />
+              </button>
+
               {/* Dark mode toggle */}
               <button
                 type="button"
@@ -591,12 +1123,12 @@ export default function ChatListScreen() {
                 title="Refresh"
               >
                 <RefreshCw
-                  className="w-4 h-4"
+                  className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
                   style={{ color: "oklch(0.65 0.08 70)" }}
                 />
               </button>
 
-              {/* Avatar with mood ring — opens profile modal */}
+              {/* Avatar with mood ring */}
               <button
                 type="button"
                 onClick={() => setShowProfile(true)}
@@ -622,7 +1154,7 @@ export default function ChatListScreen() {
             </div>
           </div>
 
-          {/* Greeting row + friend code + XP level + add friend button */}
+          {/* Greeting row */}
           <div className="mt-3 flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <h1
@@ -636,7 +1168,6 @@ export default function ChatListScreen() {
                   Hi, {profile?.username ?? "there"}!
                 </p>
                 {myFriendCode && <FriendCodeBadge code={myFriendCode} />}
-                {/* XP level badge */}
                 <span
                   className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
                   style={{
@@ -720,7 +1251,34 @@ export default function ChatListScreen() {
         </header>
 
         {/* ── Main content ── */}
-        <main className="flex-1 px-4 pb-6">
+        <main
+          ref={mainRef}
+          className="flex-1 px-4 pb-6"
+          onTouchStart={handlePullTouchStart}
+          onTouchMove={handlePullTouchMove}
+          onTouchEnd={() => void handlePullTouchEnd()}
+        >
+          {/* Pull to refresh indicator */}
+          {(pullY > 0 || isRefreshing) && (
+            <div
+              className="flex items-center justify-center py-3 transition-all"
+              style={{ height: isRefreshing ? 48 : Math.max(pullY * 0.5, 0) }}
+            >
+              <span
+                className="text-2xl"
+                style={{
+                  display: "inline-block",
+                  animation: isRefreshing
+                    ? "sunflowerSpin 1s linear infinite"
+                    : "none",
+                  opacity: pullY > 30 ? 1 : pullY / 30,
+                }}
+              >
+                🌻
+              </span>
+            </div>
+          )}
+
           {/* ── Chats tab ── */}
           {activeTab === "chats" && (
             <div>
@@ -784,108 +1342,158 @@ export default function ChatListScreen() {
                     const closeFriend = isCloseFriend(conv, currentUserId);
 
                     return (
-                      <button
-                        type="button"
+                      <div
                         key={conv.id}
-                        onClick={() => {
-                          markConversationRead(conv.id);
-                          openConversation(conv.id, participant.name);
-                        }}
-                        className="w-full text-left bg-white rounded-[20px] p-4 shadow-card hover:shadow-card-hover transition-all duration-200 active:scale-[0.98] animate-fade-in-up"
-                        style={{ animationDelay: `${index * 0.05}s` }}
+                        className="relative"
+                        onPointerDown={(e) => handleConvPointerDown(e, conv.id)}
+                        onPointerUp={handleConvPointerUp}
+                        onPointerLeave={handleConvPointerUp}
                       >
-                        <div className="flex items-center gap-3">
-                          {/* Avatar with unread indicator */}
-                          <div className="relative flex-shrink-0">
-                            <div
-                              className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold ${colorClass}`}
-                            >
-                              {initials}
-                            </div>
-                            {unreadCount > 0 && (
-                              <span
-                                className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white font-bold"
-                                style={{
-                                  background: "oklch(0.6 0.22 28)",
-                                  fontSize: "10px",
-                                  padding: "0 4px",
-                                  boxShadow: "0 0 0 2px white",
-                                }}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            markConversationRead(conv.id);
+                            openConversation(conv.id, participant.name);
+                          }}
+                          className="w-full text-left bg-white rounded-[20px] p-4 shadow-card hover:shadow-card-hover transition-all duration-200 active:scale-[0.98] animate-fade-in-up"
+                          style={{
+                            animationDelay: `${index * 0.05}s`,
+                            border: conv.isPinned
+                              ? "1.5px solid oklch(0.82 0.12 80)"
+                              : "1.5px solid transparent",
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="relative flex-shrink-0">
+                              <div
+                                className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold ${colorClass}`}
                               >
-                                {unreadCount > 99 ? "99+" : unreadCount}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 min-w-0">
+                                {initials}
+                              </div>
+                              {unreadCount > 0 && (
                                 <span
-                                  className="font-bold text-sm truncate"
+                                  className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white font-bold"
                                   style={{
-                                    color:
-                                      unreadCount > 0
-                                        ? "oklch(0.3 0.1 65)"
-                                        : "oklch(0.35 0.06 65)",
+                                    background: "oklch(0.6 0.22 28)",
+                                    fontSize: "10px",
+                                    padding: "0 4px",
+                                    boxShadow: "0 0 0 2px white",
                                   }}
                                 >
-                                  {participant.name}
-                                </span>
-                                {/* Close friend badge */}
-                                {closeFriend && (
-                                  <span
-                                    className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full font-semibold"
-                                    style={{
-                                      background: "oklch(0.96 0.08 88)",
-                                      color: "oklch(0.52 0.12 68)",
-                                      fontSize: "10px",
-                                    }}
-                                  >
-                                    🌻 Best Sunflower
-                                  </span>
-                                )}
-                              </div>
-                              {lastMsg && (
-                                <span
-                                  className="text-xs flex-shrink-0"
-                                  style={{ color: "oklch(0.72 0.04 70)" }}
-                                >
-                                  {formatRelativeTime(lastMsg.timestamp)}
+                                  {unreadCount > 99 ? "99+" : unreadCount}
                                 </span>
                               )}
                             </div>
-                            {lastMsg ? (
-                              <p
-                                className="text-xs mt-0.5 truncate"
-                                style={{
-                                  color:
-                                    unreadCount > 0
-                                      ? "oklch(0.42 0.08 65)"
-                                      : "oklch(0.6 0.05 70)",
-                                  fontWeight: unreadCount > 0 ? 600 : 400,
-                                }}
-                              >
-                                {lastMsg.senderId === currentUserId
-                                  ? "You: "
-                                  : ""}
-                                {lastMsg.content}
-                              </p>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {/* Pin indicator */}
+                                  {conv.isPinned && (
+                                    <Pin
+                                      className="w-3 h-3 flex-shrink-0"
+                                      style={{ color: "oklch(0.72 0.155 68)" }}
+                                    />
+                                  )}
+                                  <span
+                                    className="font-bold text-sm truncate"
+                                    style={{
+                                      color:
+                                        unreadCount > 0
+                                          ? "oklch(0.3 0.1 65)"
+                                          : "oklch(0.35 0.06 65)",
+                                    }}
+                                  >
+                                    {participant.name}
+                                  </span>
+                                  {/* Group badge */}
+                                  {conv.isGroup && (
+                                    <span
+                                      className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-1"
+                                      style={{
+                                        background: "oklch(0.94 0.05 240)",
+                                        color: "oklch(0.42 0.12 240)",
+                                        fontSize: "10px",
+                                      }}
+                                    >
+                                      <Users className="w-2.5 h-2.5" /> Group
+                                    </span>
+                                  )}
+                                  {/* Close friend badge */}
+                                  {closeFriend && (
+                                    <span
+                                      className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full font-semibold"
+                                      style={{
+                                        background: "oklch(0.96 0.08 88)",
+                                        color: "oklch(0.52 0.12 68)",
+                                        fontSize: "10px",
+                                      }}
+                                    >
+                                      🌻 Best
+                                    </span>
+                                  )}
+                                </div>
+                                {lastMsg && (
+                                  <span
+                                    className="text-xs flex-shrink-0"
+                                    style={{ color: "oklch(0.72 0.04 70)" }}
+                                  >
+                                    {formatRelativeTime(lastMsg.timestamp)}
+                                  </span>
+                                )}
+                              </div>
+                              {lastMsg ? (
+                                <p
+                                  className="text-xs mt-0.5 truncate"
+                                  style={{
+                                    color:
+                                      unreadCount > 0
+                                        ? "oklch(0.42 0.08 65)"
+                                        : "oklch(0.6 0.05 70)",
+                                    fontWeight: unreadCount > 0 ? 600 : 400,
+                                  }}
+                                >
+                                  {lastMsg.deleted ? (
+                                    "🗑️ Message deleted"
+                                  ) : (
+                                    <>
+                                      {lastMsg.senderId === currentUserId
+                                        ? "You: "
+                                        : ""}
+                                      {lastMsg.messageType === "image"
+                                        ? "📷 Image"
+                                        : lastMsg.messageType === "voice"
+                                          ? "🎙️ Voice"
+                                          : lastMsg.messageType === "gif"
+                                            ? "🎞️ GIF"
+                                            : lastMsg.content}
+                                    </>
+                                  )}
+                                </p>
+                              ) : (
+                                <p
+                                  className="text-xs mt-0.5 italic"
+                                  style={{ color: "oklch(0.72 0.04 70)" }}
+                                >
+                                  No messages yet
+                                </p>
+                              )}
+                            </div>
+
+                            {conv.isGroup ? (
+                              <Users
+                                className="w-4 h-4 flex-shrink-0 opacity-40"
+                                style={{ color: "oklch(0.72 0.155 68)" }}
+                              />
                             ) : (
-                              <p
-                                className="text-xs mt-0.5 italic"
-                                style={{ color: "oklch(0.72 0.04 70)" }}
-                              >
-                                No messages yet
-                              </p>
+                              <MessageCircle
+                                className="w-4 h-4 flex-shrink-0 opacity-40"
+                                style={{ color: "oklch(0.72 0.155 68)" }}
+                              />
                             )}
                           </div>
-
-                          <MessageCircle
-                            className="w-4 h-4 flex-shrink-0 opacity-40"
-                            style={{ color: "oklch(0.72 0.155 68)" }}
-                          />
-                        </div>
-                      </button>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -947,14 +1555,12 @@ export default function ChatListScreen() {
                         style={{ animationDelay: `${index * 0.05}s` }}
                       >
                         <div className="flex items-center gap-3">
-                          {/* Avatar */}
                           <div
                             className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${colorClass}`}
                           >
                             {initials}
                           </div>
 
-                          {/* Info */}
                           <div className="flex-1 min-w-0">
                             <span
                               className="font-bold text-sm block truncate"
@@ -970,7 +1576,6 @@ export default function ChatListScreen() {
                             </span>
                           </div>
 
-                          {/* Actions */}
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
@@ -1029,12 +1634,69 @@ export default function ChatListScreen() {
         </footer>
       </div>
 
+      {/* Context menu for pin/unpin */}
+      {contextConvId && contextConv && (
+        <div
+          className="fixed z-50 bg-white rounded-2xl p-2 shadow-2xl"
+          style={{
+            left: Math.min(contextPos.x, window.innerWidth - 180),
+            top: Math.min(contextPos.y, window.innerHeight - 120),
+            border: "1.5px solid oklch(0.92 0.04 88)",
+            minWidth: 160,
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setContextConvId(null);
+          }}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              pinMutation.mutate({
+                convId: contextConvId,
+                pinned: !contextConv.isPinned,
+              })
+            }
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium hover:bg-yellow-50 transition-colors text-left"
+            style={{ color: "oklch(0.38 0.08 65)" }}
+          >
+            <Pin className="w-3.5 h-3.5" />
+            {contextConv.isPinned ? "Unpin Chat" : "📌 Pin Chat"}
+          </button>
+        </div>
+      )}
+
       {/* Add Friend Modal */}
       {showAddFriend && (
         <AddFriendModal
           myCode={myFriendCode}
           onAdd={handleAddFriend}
           onClose={() => setShowAddFriend(false)}
+        />
+      )}
+
+      {/* Group Chat Modal */}
+      {showGroupModal && sessionId && (
+        <GroupChatModal
+          friends={friends}
+          sessionId={sessionId}
+          onClose={() => setShowGroupModal(false)}
+          onCreated={(convId, groupName) => {
+            setShowGroupModal(false);
+            queryClient.invalidateQueries({
+              queryKey: ["conversations", sessionId],
+            });
+            openConversation(convId, groupName);
+          }}
+        />
+      )}
+
+      {/* Broadcast Modal */}
+      {showBroadcast && sessionId && (
+        <BroadcastModal
+          friends={friends}
+          sessionId={sessionId}
+          onClose={() => setShowBroadcast(false)}
         />
       )}
 
@@ -1052,6 +1714,13 @@ export default function ChatListScreen() {
       {showDailySurprise && (
         <DailySurpriseModal onClose={handleDailySurpriseClose} />
       )}
+
+      <style>{`
+        @keyframes sunflowerSpin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

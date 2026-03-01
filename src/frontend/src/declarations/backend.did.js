@@ -9,26 +9,30 @@
 import { IDL } from '@icp-sdk/core/candid';
 
 export const SessionId = IDL.Text;
+export const ConversationId = IDL.Text;
+export const MessageId = IDL.Text;
 export const Time = IDL.Int;
 export const UserId = IDL.Text;
-export const Message = IDL.Record({
-  'id' : IDL.Text,
+export const MessageView = IDL.Record({
+  'id' : MessageId,
+  'deleted' : IDL.Bool,
   'content' : IDL.Text,
+  'edited' : IDL.Bool,
+  'replyPreview' : IDL.Opt(IDL.Text),
+  'messageType' : IDL.Text,
   'timestamp' : Time,
   'senderName' : IDL.Text,
+  'replyToId' : IDL.Opt(IDL.Text),
+  'reactions' : IDL.Text,
   'senderId' : UserId,
 });
 export const ConversationView = IDL.Record({
-  'id' : IDL.Text,
-  'messages' : IDL.Vec(Message),
+  'id' : ConversationId,
+  'messages' : IDL.Vec(MessageView),
+  'isGroup' : IDL.Bool,
   'participantIds' : IDL.Vec(UserId),
-});
-export const MessagePreview = IDL.Record({
-  'id' : IDL.Text,
-  'content' : IDL.Text,
-  'timestamp' : Time,
-  'senderName' : IDL.Text,
-  'senderId' : UserId,
+  'groupName' : IDL.Opt(IDL.Text),
+  'isPinned' : IDL.Bool,
 });
 export const Email = IDL.Text;
 export const Profile = IDL.Record({
@@ -36,52 +40,101 @@ export const Profile = IDL.Record({
   'username' : IDL.Text,
   'email' : Email,
   'avatarColor' : IDL.Opt(IDL.Text),
+  'hideLastSeen' : IDL.Bool,
+  'isPublic' : IDL.Bool,
+  'lastSeen' : Time,
 });
 
 export const idlService = IDL.Service({
-  'createConversation' : IDL.Func([SessionId, IDL.Text], [IDL.Text], []),
+  'broadcastMessage' : IDL.Func(
+      [SessionId, IDL.Vec(IDL.Text), IDL.Text],
+      [],
+      [],
+    ),
+  'createConversation' : IDL.Func([SessionId, IDL.Text], [ConversationId], []),
+  'createGroupConversation' : IDL.Func(
+      [SessionId, IDL.Text, IDL.Vec(IDL.Text)],
+      [ConversationId],
+      [],
+    ),
+  'deleteMessageForEveryone' : IDL.Func(
+      [SessionId, ConversationId, MessageId],
+      [],
+      [],
+    ),
+  'editMessage' : IDL.Func(
+      [SessionId, ConversationId, MessageId, IDL.Text],
+      [],
+      [],
+    ),
   'getConversations' : IDL.Func(
       [SessionId],
       [IDL.Vec(ConversationView)],
       ['query'],
     ),
   'getMessages' : IDL.Func(
-      [SessionId, IDL.Text, IDL.Nat, IDL.Nat],
-      [IDL.Vec(MessagePreview)],
+      [SessionId, ConversationId, IDL.Nat, IDL.Nat],
+      [IDL.Vec(MessageView)],
       ['query'],
     ),
   'getProfile' : IDL.Func([SessionId], [Profile], ['query']),
   'login' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
+  'pinConversation' : IDL.Func([SessionId, ConversationId, IDL.Bool], [], []),
+  'reactToMessage' : IDL.Func(
+      [SessionId, ConversationId, MessageId, IDL.Text],
+      [],
+      [],
+    ),
   'register' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   'seedSampleData' : IDL.Func([], [], []),
-  'sendMessage' : IDL.Func([SessionId, IDL.Text, IDL.Text], [], []),
-  'updateProfile' : IDL.Func([SessionId, IDL.Text, IDL.Opt(IDL.Text)], [], []),
+  'sendMessage' : IDL.Func(
+      [
+        SessionId,
+        ConversationId,
+        IDL.Text,
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Text,
+      ],
+      [],
+      [],
+    ),
+  'updateLastSeen' : IDL.Func([SessionId], [], []),
+  'updateProfile' : IDL.Func(
+      [SessionId, IDL.Text, IDL.Opt(IDL.Text), IDL.Bool, IDL.Bool],
+      [],
+      [],
+    ),
 });
 
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
   const SessionId = IDL.Text;
+  const ConversationId = IDL.Text;
+  const MessageId = IDL.Text;
   const Time = IDL.Int;
   const UserId = IDL.Text;
-  const Message = IDL.Record({
-    'id' : IDL.Text,
+  const MessageView = IDL.Record({
+    'id' : MessageId,
+    'deleted' : IDL.Bool,
     'content' : IDL.Text,
+    'edited' : IDL.Bool,
+    'replyPreview' : IDL.Opt(IDL.Text),
+    'messageType' : IDL.Text,
     'timestamp' : Time,
     'senderName' : IDL.Text,
+    'replyToId' : IDL.Opt(IDL.Text),
+    'reactions' : IDL.Text,
     'senderId' : UserId,
   });
   const ConversationView = IDL.Record({
-    'id' : IDL.Text,
-    'messages' : IDL.Vec(Message),
+    'id' : ConversationId,
+    'messages' : IDL.Vec(MessageView),
+    'isGroup' : IDL.Bool,
     'participantIds' : IDL.Vec(UserId),
-  });
-  const MessagePreview = IDL.Record({
-    'id' : IDL.Text,
-    'content' : IDL.Text,
-    'timestamp' : Time,
-    'senderName' : IDL.Text,
-    'senderId' : UserId,
+    'groupName' : IDL.Opt(IDL.Text),
+    'isPinned' : IDL.Bool,
   });
   const Email = IDL.Text;
   const Profile = IDL.Record({
@@ -89,27 +142,72 @@ export const idlFactory = ({ IDL }) => {
     'username' : IDL.Text,
     'email' : Email,
     'avatarColor' : IDL.Opt(IDL.Text),
+    'hideLastSeen' : IDL.Bool,
+    'isPublic' : IDL.Bool,
+    'lastSeen' : Time,
   });
   
   return IDL.Service({
-    'createConversation' : IDL.Func([SessionId, IDL.Text], [IDL.Text], []),
+    'broadcastMessage' : IDL.Func(
+        [SessionId, IDL.Vec(IDL.Text), IDL.Text],
+        [],
+        [],
+      ),
+    'createConversation' : IDL.Func(
+        [SessionId, IDL.Text],
+        [ConversationId],
+        [],
+      ),
+    'createGroupConversation' : IDL.Func(
+        [SessionId, IDL.Text, IDL.Vec(IDL.Text)],
+        [ConversationId],
+        [],
+      ),
+    'deleteMessageForEveryone' : IDL.Func(
+        [SessionId, ConversationId, MessageId],
+        [],
+        [],
+      ),
+    'editMessage' : IDL.Func(
+        [SessionId, ConversationId, MessageId, IDL.Text],
+        [],
+        [],
+      ),
     'getConversations' : IDL.Func(
         [SessionId],
         [IDL.Vec(ConversationView)],
         ['query'],
       ),
     'getMessages' : IDL.Func(
-        [SessionId, IDL.Text, IDL.Nat, IDL.Nat],
-        [IDL.Vec(MessagePreview)],
+        [SessionId, ConversationId, IDL.Nat, IDL.Nat],
+        [IDL.Vec(MessageView)],
         ['query'],
       ),
     'getProfile' : IDL.Func([SessionId], [Profile], ['query']),
     'login' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
+    'pinConversation' : IDL.Func([SessionId, ConversationId, IDL.Bool], [], []),
+    'reactToMessage' : IDL.Func(
+        [SessionId, ConversationId, MessageId, IDL.Text],
+        [],
+        [],
+      ),
     'register' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
     'seedSampleData' : IDL.Func([], [], []),
-    'sendMessage' : IDL.Func([SessionId, IDL.Text, IDL.Text], [], []),
+    'sendMessage' : IDL.Func(
+        [
+          SessionId,
+          ConversationId,
+          IDL.Text,
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Text,
+        ],
+        [],
+        [],
+      ),
+    'updateLastSeen' : IDL.Func([SessionId], [], []),
     'updateProfile' : IDL.Func(
-        [SessionId, IDL.Text, IDL.Opt(IDL.Text)],
+        [SessionId, IDL.Text, IDL.Opt(IDL.Text), IDL.Bool, IDL.Bool],
         [],
         [],
       ),

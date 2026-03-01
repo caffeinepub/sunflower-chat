@@ -1,7 +1,13 @@
-import { Loader2, X } from "lucide-react";
+import { Eye, EyeOff, Globe, KeyRound, Loader2, Lock, X } from "lucide-react";
 import { useState } from "react";
 import type { Profile } from "../backend.d";
 import { useActor } from "../hooks/useActor";
+import {
+  PinSetPrompt,
+  getStoredPin,
+  isAppLockEnabled,
+  removeStoredPin,
+} from "../screens/AppLockScreen";
 import {
   type Mood,
   XP_LEVELS,
@@ -36,6 +42,20 @@ const MOOD_OPTIONS: {
   { value: "sleepy", label: "Sleepy", emoji: "🌙", ring: "oklch(0.6 0.08 55)" },
 ];
 
+function formatLastSeen(lastSeen: bigint): string {
+  if (!lastSeen || lastSeen === 0n) return "Never";
+  const ms = Number(lastSeen) / 1_000_000;
+  const diff = Date.now() - ms;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 2) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
 export default function ProfileModal({
   profile,
   sessionId,
@@ -50,9 +70,15 @@ export default function ProfileModal({
   const [status, setStatusState] = useState(() => getStatus(userId));
   const [birthday, setBirthdayState] = useState(() => getBirthday(userId));
   const [mood, setMoodState] = useState<Mood | null>(() => getMood(userId));
+  const [isPublic, setIsPublic] = useState(profile.isPublic ?? true);
+  const [hideLastSeen, setHideLastSeen] = useState(
+    profile.hideLastSeen ?? false,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pinEnabled, setPinEnabled] = useState(isAppLockEnabled);
 
   const xp = getXP(userId);
   const level = getXpLevel(xp);
@@ -66,22 +92,26 @@ export default function ProfileModal({
     setSaving(true);
 
     try {
-      // Save profile to backend (username + avatarColor)
       await actor.updateProfile(
         sessionId,
         username.trim(),
         profile.avatarColor ?? null,
+        isPublic,
+        hideLastSeen,
       );
 
-      // Save local features to localStorage
       setBio(userId, bio);
       setStatus(userId, status);
       setBirthday(userId, birthday);
       setMood(userId, mood);
 
-      // Notify parent of updated profile
       if (onProfileUpdated) {
-        onProfileUpdated({ ...profile, username: username.trim() });
+        onProfileUpdated({
+          ...profile,
+          username: username.trim(),
+          isPublic,
+          hideLastSeen,
+        });
       }
 
       setSaved(true);
@@ -175,7 +205,6 @@ export default function ProfileModal({
                   {xp} XP
                 </span>
               </div>
-              {/* Progress bar */}
               <div
                 className="h-2 rounded-full overflow-hidden"
                 style={{ background: "oklch(0.93 0.04 88)" }}
@@ -247,7 +276,7 @@ export default function ProfileModal({
             </p>
           </div>
 
-          {/* Status line */}
+          {/* Status */}
           <div>
             <label
               htmlFor="profile-status"
@@ -295,7 +324,6 @@ export default function ProfileModal({
               Mood Ring 💫
             </p>
             <div className="flex gap-2">
-              {/* No mood option */}
               <button
                 type="button"
                 onClick={() => setMoodState(null)}
@@ -342,6 +370,205 @@ export default function ProfileModal({
             </div>
           </div>
 
+          {/* Privacy section */}
+          <div
+            className="rounded-2xl p-4 flex flex-col gap-3"
+            style={{
+              background: "oklch(0.97 0.025 90)",
+              border: "1.5px solid oklch(0.92 0.04 88)",
+            }}
+          >
+            <p
+              className="text-sm font-bold"
+              style={{ color: "oklch(0.42 0.08 65)" }}
+            >
+              Privacy Settings 🔒
+            </p>
+
+            {/* Public account toggle */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Globe
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: "oklch(0.65 0.08 70)" }}
+                />
+                <div>
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: "oklch(0.42 0.06 65)" }}
+                  >
+                    Public Account
+                  </p>
+                  <p
+                    className="text-xs"
+                    style={{ color: "oklch(0.65 0.04 68)" }}
+                  >
+                    Others can find you by username
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isPublic}
+                onClick={() => setIsPublic((v) => !v)}
+                className="w-11 h-6 rounded-full relative transition-all duration-200 flex-shrink-0"
+                style={{
+                  background: isPublic
+                    ? "oklch(0.72 0.155 68)"
+                    : "oklch(0.82 0.04 80)",
+                  boxShadow: isPublic
+                    ? "0 2px 8px oklch(0.72 0.155 68 / 0.4)"
+                    : "none",
+                }}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200"
+                  style={{ left: isPublic ? "calc(100% - 22px)" : 2 }}
+                />
+              </button>
+            </div>
+
+            {/* Hide last seen toggle */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {hideLastSeen ? (
+                  <EyeOff
+                    className="w-4 h-4 flex-shrink-0"
+                    style={{ color: "oklch(0.65 0.08 70)" }}
+                  />
+                ) : (
+                  <Eye
+                    className="w-4 h-4 flex-shrink-0"
+                    style={{ color: "oklch(0.65 0.08 70)" }}
+                  />
+                )}
+                <div>
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: "oklch(0.42 0.06 65)" }}
+                  >
+                    Hide Last Seen
+                  </p>
+                  <p
+                    className="text-xs"
+                    style={{ color: "oklch(0.65 0.04 68)" }}
+                  >
+                    {hideLastSeen
+                      ? "Others can't see when you were last active"
+                      : "Others can see your last seen time"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hideLastSeen}
+                onClick={() => setHideLastSeen((v) => !v)}
+                className="w-11 h-6 rounded-full relative transition-all duration-200 flex-shrink-0"
+                style={{
+                  background: hideLastSeen
+                    ? "oklch(0.72 0.155 68)"
+                    : "oklch(0.82 0.04 80)",
+                  boxShadow: hideLastSeen
+                    ? "0 2px 8px oklch(0.72 0.155 68 / 0.4)"
+                    : "none",
+                }}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200"
+                  style={{ left: hideLastSeen ? "calc(100% - 22px)" : 2 }}
+                />
+              </button>
+            </div>
+
+            {/* Last seen info */}
+            {!hideLastSeen && profile.lastSeen && (
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
+                style={{ background: "white" }}
+              >
+                <Lock
+                  className="w-3 h-3"
+                  style={{ color: "oklch(0.65 0.06 70)" }}
+                />
+                <p className="text-xs" style={{ color: "oklch(0.58 0.05 68)" }}>
+                  Last seen: {formatLastSeen(profile.lastSeen)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* App Lock section */}
+          <div
+            className="rounded-2xl p-4 flex flex-col gap-3"
+            style={{
+              background: "oklch(0.97 0.025 90)",
+              border: "1.5px solid oklch(0.92 0.04 88)",
+            }}
+          >
+            <p
+              className="text-sm font-bold"
+              style={{ color: "oklch(0.42 0.08 65)" }}
+            >
+              App Lock 🔐
+            </p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <KeyRound
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: "oklch(0.65 0.08 70)" }}
+                />
+                <div>
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: "oklch(0.42 0.06 65)" }}
+                  >
+                    PIN Lock
+                  </p>
+                  <p
+                    className="text-xs"
+                    style={{ color: "oklch(0.65 0.04 68)" }}
+                  >
+                    {pinEnabled
+                      ? "App locks after 5 min idle"
+                      : "Protect your chats with a PIN"}
+                  </p>
+                </div>
+              </div>
+              {pinEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    removeStoredPin();
+                    setPinEnabled(false);
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:opacity-80 active:scale-95"
+                  style={{
+                    background: "oklch(0.95 0.03 25)",
+                    color: "oklch(0.5 0.15 25)",
+                  }}
+                >
+                  Remove PIN
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowPinPrompt(true)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:opacity-80 active:scale-95"
+                  style={{ background: "oklch(0.72 0.155 68)", color: "white" }}
+                >
+                  Set PIN
+                </button>
+              )}
+            </div>
+            {pinEnabled && getStoredPin() && (
+              <p className="text-xs" style={{ color: "oklch(0.55 0.1 140)" }}>
+                ✅ PIN is set and active
+              </p>
+            )}
+          </div>
+
           {/* Error */}
           {error && (
             <div
@@ -373,6 +600,17 @@ export default function ProfileModal({
           </button>
         </form>
       </div>
+
+      {/* PIN Set Prompt overlay */}
+      {showPinPrompt && (
+        <PinSetPrompt
+          onSet={() => {
+            setPinEnabled(true);
+            setShowPinPrompt(false);
+          }}
+          onClose={() => setShowPinPrompt(false)}
+        />
+      )}
     </div>
   );
 }

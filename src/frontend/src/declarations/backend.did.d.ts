@@ -10,24 +10,28 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export type ConversationId = string;
 export interface ConversationView {
-  'id' : string,
-  'messages' : Array<Message>,
+  'id' : ConversationId,
+  'messages' : Array<MessageView>,
+  'isGroup' : boolean,
   'participantIds' : Array<UserId>,
+  'groupName' : [] | [string],
+  'isPinned' : boolean,
 }
 export type Email = string;
-export interface Message {
-  'id' : string,
+export type MessageId = string;
+export interface MessageView {
+  'id' : MessageId,
+  'deleted' : boolean,
   'content' : string,
+  'edited' : boolean,
+  'replyPreview' : [] | [string],
+  'messageType' : string,
   'timestamp' : Time,
   'senderName' : string,
-  'senderId' : UserId,
-}
-export interface MessagePreview {
-  'id' : string,
-  'content' : string,
-  'timestamp' : Time,
-  'senderName' : string,
+  'replyToId' : [] | [string],
+  'reactions' : string,
   'senderId' : UserId,
 }
 export interface Profile {
@@ -35,23 +39,57 @@ export interface Profile {
   'username' : string,
   'email' : Email,
   'avatarColor' : [] | [string],
+  'hideLastSeen' : boolean,
+  'isPublic' : boolean,
+  'lastSeen' : Time,
 }
 export type SessionId = string;
 export type Time = bigint;
 export type UserId = string;
 export interface _SERVICE {
-  'createConversation' : ActorMethod<[SessionId, string], string>,
+  'broadcastMessage' : ActorMethod<
+    [SessionId, Array<string>, string],
+    undefined
+  >,
+  'createConversation' : ActorMethod<[SessionId, string], ConversationId>,
+  'createGroupConversation' : ActorMethod<
+    [SessionId, string, Array<string>],
+    ConversationId
+  >,
+  'deleteMessageForEveryone' : ActorMethod<
+    [SessionId, ConversationId, MessageId],
+    undefined
+  >,
+  'editMessage' : ActorMethod<
+    [SessionId, ConversationId, MessageId, string],
+    undefined
+  >,
   'getConversations' : ActorMethod<[SessionId], Array<ConversationView>>,
   'getMessages' : ActorMethod<
-    [SessionId, string, bigint, bigint],
-    Array<MessagePreview>
+    [SessionId, ConversationId, bigint, bigint],
+    Array<MessageView>
   >,
   'getProfile' : ActorMethod<[SessionId], Profile>,
   'login' : ActorMethod<[string, string], SessionId>,
+  'pinConversation' : ActorMethod<
+    [SessionId, ConversationId, boolean],
+    undefined
+  >,
+  'reactToMessage' : ActorMethod<
+    [SessionId, ConversationId, MessageId, string],
+    undefined
+  >,
   'register' : ActorMethod<[string, string, string], undefined>,
   'seedSampleData' : ActorMethod<[], undefined>,
-  'sendMessage' : ActorMethod<[SessionId, string, string], undefined>,
-  'updateProfile' : ActorMethod<[SessionId, string, [] | [string]], undefined>,
+  'sendMessage' : ActorMethod<
+    [SessionId, ConversationId, string, [] | [string], [] | [string], string],
+    undefined
+  >,
+  'updateLastSeen' : ActorMethod<[SessionId], undefined>,
+  'updateProfile' : ActorMethod<
+    [SessionId, string, [] | [string], boolean, boolean],
+    undefined
+  >,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
