@@ -376,7 +376,9 @@ function MessageBubble({
   // Deleted state
   if (isDeleted || msg.deleted) {
     return (
-      <div className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+      <div
+        className={`w-full flex flex-col ${isMine ? "items-end" : "items-start"}`}
+      >
         <div
           className="px-4 py-2 rounded-2xl text-xs italic opacity-40"
           style={{
@@ -398,7 +400,7 @@ function MessageBubble({
 
   return (
     <div
-      className={`flex flex-col ${isMine ? "items-end" : "items-start"} animate-fade-in`}
+      className={`w-full flex flex-col ${isMine ? "items-end" : "items-start"} animate-fade-in`}
       style={{
         transform: `translateX(${isSwiping ? (isMine ? -swipeX : swipeX) : 0}px)`,
         transition: isSwiping ? "none" : "transform 0.2s ease-out",
@@ -454,7 +456,7 @@ function MessageBubble({
         {/* Bubble */}
         <div
           ref={bubbleRef}
-          className={`px-4 py-2.5 transition-opacity duration-300 relative group ${
+          className={`px-4 py-3 transition-opacity duration-300 relative group ${
             isMine ? "chat-bubble-sent" : "chat-bubble-received"
           } ${isOptimistic ? "opacity-60" : "opacity-100"}`}
           style={{
@@ -924,6 +926,13 @@ export default function ChatScreen() {
   const participantName = activeConversationName ?? "Chat";
   const currentUserId = profile?.id ?? "";
   const currentUserName = profile?.username ?? "";
+
+  // Debug: log currentUserId so alignment comparisons can be verified in DevTools
+  useEffect(() => {
+    if (currentUserId) {
+      console.debug("[SunflowerChat] currentUserId =", currentUserId);
+    }
+  }, [currentUserId]);
 
   const mood = getMood(currentUserId);
   const moodRingStyle = getMoodRingStyle(mood);
@@ -1411,7 +1420,7 @@ export default function ChatScreen() {
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               {hasOlderMessages && (
                 <div className="flex justify-center py-2">
                   <button
@@ -1431,6 +1440,12 @@ export default function ChatScreen() {
               )}
               {sortedMessages.map((msg, index) => {
                 const isMine = msg.senderId === currentUserId;
+                // Debug: log ID comparison for first few messages
+                if (index < 3) {
+                  console.debug(
+                    `[SunflowerChat] msg[${index}] senderId="${msg.senderId}" currentUserId="${currentUserId}" isMine=${isMine}`,
+                  );
+                }
                 const isOptimistic = msg.id.startsWith("optimistic-");
                 const prevMsg = index > 0 ? sortedMessages[index - 1] : null;
                 const showSenderName =
@@ -1444,7 +1459,7 @@ export default function ChatScreen() {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
+                      className={`w-full flex flex-col ${isMine ? "items-end" : "items-start"}`}
                     >
                       <div className="max-w-[75%] w-full">
                         <div
@@ -1521,22 +1536,30 @@ export default function ChatScreen() {
                   );
                 }
 
+                // Add extra spacing when sender changes
+                const senderChanged =
+                  prevMsg !== null && prevMsg.senderId !== msg.senderId;
+
                 return (
-                  <MessageBubble
+                  <div
                     key={msg.id}
-                    msg={msg}
-                    isMine={isMine}
-                    isOptimistic={isOptimistic}
-                    showSenderName={showSenderName}
-                    convId={convId}
-                    onReactionAdd={handleReactionAdd}
-                    onDelete={handleDeleteMessage}
-                    onEdit={handleEditMessage}
-                    onReply={handleReplyTo}
-                    reactions={localReactions}
-                    isDeleted={isDeleted}
-                    isSecret={isSecret}
-                  />
+                    style={{ marginTop: senderChanged ? 8 : 0 }}
+                  >
+                    <MessageBubble
+                      msg={msg}
+                      isMine={isMine}
+                      isOptimistic={isOptimistic}
+                      showSenderName={showSenderName}
+                      convId={convId}
+                      onReactionAdd={handleReactionAdd}
+                      onDelete={handleDeleteMessage}
+                      onEdit={handleEditMessage}
+                      onReply={handleReplyTo}
+                      reactions={localReactions}
+                      isDeleted={isDeleted}
+                      isSecret={isSecret}
+                    />
+                  </div>
                 );
               })}
               <div ref={messagesEndRef} />
