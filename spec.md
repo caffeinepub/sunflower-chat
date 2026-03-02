@@ -1,39 +1,36 @@
 # Sunflower Chat
 
 ## Current State
-- Login/Register screen with email + password
-- Backend: `register`, `login`, `getProfile` functions
-- No password reset, no mobile login, no OTP system
+ChatScreen.tsx renders all messages in a flex column. MessageBubble uses `max-w-[75%]` and `break-words` on the `<p>` tag, but the animation class `.animate-fade-in` has a 0.6s duration and the CSS lacks explicit `word-break: normal` / `white-space: normal` rules. The bubble container uses `overflow-hidden` which can cause character-level clipping. The message query fetches 50 messages and re-renders on every 1.5s poll, including a full sort on every render.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Forgot Password flow**: User enters registered email → backend generates a 6-digit OTP → OTP shown on-screen (platform cannot send real emails, so OTP is displayed in a toast/modal for the user to copy) → user enters OTP → user sets new password
-- **Mobile Number Login**: User can register/login with a mobile number + OTP instead of email+password. Backend generates a 6-digit OTP → displayed on-screen (SMS gateway not available on platform) → user enters OTP to authenticate
-- Backend methods: `requestPasswordReset(email)`, `verifyPasswordReset(email, otp, newPassword)`, `registerWithMobile(username, mobile)`, `loginWithMobile(mobile)`, `verifyMobileOtp(mobile, otp)`
-- User model extended with optional `mobile` field and `passwordHash` for reset
+- `word-break: normal` and `white-space: normal` explicitly on message `<p>` element
+- `overflow-wrap: break-word` (CSS class) so long URLs/words wrap at word boundaries only
+- Virtualized/windowed message list: render only latest 25 messages on initial load, load older messages when user scrolls to top
+- Debounced input handler (300ms) to prevent rapid state updates on each keystroke
+- Lightweight fade-in animation (150ms, opacity only, no transform)
+- `useCallback` + `useMemo` guards on sorted messages and per-message derived values to prevent unnecessary re-renders
+- Smooth `scrollIntoView` only triggered when near bottom or on initial load
 
 ### Modify
-- `LoginScreen.tsx` -- add tabs/toggle for "Email Login" vs "Mobile Login", add "Forgot Password?" link, add OTP entry step UI
-- Backend `User` type -- add optional `mobile: ?Text` field
-- Backend storage -- add `mobileToUserId` map, `otpStore` for pending OTPs (keyed by email or mobile)
+- `.animate-fade-in` in index.css: reduce duration from 0.6s to 0.15s, remove transform, opacity only
+- `.chat-bubble-sent` / `.chat-bubble-received` in index.css: add `word-break: normal; overflow-wrap: break-word; white-space: normal;`
+- MessageBubble `<p>` tag: remove `break-words` Tailwind class, use explicit inline style `wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal'`
+- Remove `overflow-hidden` from bubble container (was hiding text that wrapped to next line inside a narrow container)
+- Message list in ChatScreen: slice to latest 25 initially, expose "Load older" button at top
+- Polling interval stays at 1500ms but query result comparison is memoized so re-renders only happen when message IDs actually change
+- `handleInputChange`: wrap with `useCallback`, debounce the `setIsTyping` + typing timer, keep `setMessageText` immediate for responsive input
 
 ### Remove
-- Nothing removed
+- `overflow-hidden` on the bubble `div` (causes clipping)
+- Heavy 0.6s `fadeIn` animation from message bubbles (replaced with 0.15s)
 
 ## Implementation Plan
-1. Update `main.mo`:
-   - Add `mobile: ?Text` to User type
-   - Add `mobileToUserId` map
-   - Add `otpStore` map (key = email/mobile, value = {otp, expiresAt})
-   - Add `requestPasswordReset(email)` -- returns OTP (displayed in UI since no email service)
-   - Add `verifyPasswordReset(email, otp, newPassword)` -- validates OTP and resets password
-   - Add `registerWithMobile(username, mobile)` -- returns OTP
-   - Add `loginWithMobile(mobile)` -- returns OTP for existing users
-   - Add `verifyMobileOtp(mobile, otp)` -- validates OTP, returns SessionId
-2. Update `LoginScreen.tsx`:
-   - Add login method toggle: Email / Mobile
-   - Email tab: existing email+password form + "Forgot Password?" link
-   - Mobile tab: phone number input → OTP step
-   - Forgot Password flow: modal/inline step with email → OTP → new password
-   - OTP display toast: show generated OTP to user (simulated, since no SMS/email gateway)
+1. Fix `.animate-fade-in` keyframe and timing in `index.css` (0.15s, opacity only)
+2. Add `word-break: normal; overflow-wrap: break-word; white-space: normal;` to `.chat-bubble-sent` and `.chat-bubble-received` in `index.css`
+3. In `MessageBubble`, remove `overflow-hidden` from bubble div, fix `<p>` text wrapping styles
+4. In `ChatScreen`, add `useMemo` for sorted+sliced messages (latest 25), add scroll-to-top load-more button
+5. Debounce `setIsTyping` in `handleInputChange` (keep `setMessageText` immediate)
+6. Optimize scroll: `scrollToBottom` only fires when near bottom or initial load, use `requestAnimationFrame` to avoid layout jumping

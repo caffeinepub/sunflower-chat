@@ -112,11 +112,17 @@
   .chat-bubble-sent {
     background: oklch(var(--sunflower-sent));
     border-radius: 20px 20px 6px 20px;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
   }
 
   .chat-bubble-received {
     background: oklch(var(--sunflower-received));
     border-radius: 20px 20px 20px 6px;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
   }
 
   .sunflower-page {
@@ -250,7 +256,7 @@ html {
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.6s ease-out both;
+  animation: fadeIn 0.15s ease-out both;
 }
 
 .animate-fade-in-up {

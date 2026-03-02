@@ -6,11 +6,11 @@ import Text "mo:core/Text";
 import Order "mo:core/Order";
 import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
-import Migration "migration";
+
 
 import Int "mo:core/Int";
 
-(with migration = Migration.run)
+
 actor {
   type UserId = Text;
   type SessionId = Text;

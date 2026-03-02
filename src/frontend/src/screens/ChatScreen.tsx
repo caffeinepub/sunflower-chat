@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ChevronUp,
   Lock,
   Paperclip,
   Pencil,
@@ -8,7 +9,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { MessageView } from "../backend.d";
 import { useApp } from "../context/AppContext";
@@ -415,7 +416,10 @@ function MessageBubble({
         </span>
       )}
 
-      <div className="relative flex items-end gap-1.5">
+      <div
+        className="relative flex items-end gap-1.5"
+        style={{ maxWidth: "80%" }}
+      >
         {/* Reply indicator during swipe */}
         {isSwiping && swipeX > 30 && (
           <div
@@ -450,10 +454,15 @@ function MessageBubble({
         {/* Bubble */}
         <div
           ref={bubbleRef}
-          className={`max-w-[75%] px-4 py-2.5 transition-opacity duration-300 relative overflow-hidden group ${
+          className={`px-4 py-2.5 transition-opacity duration-300 relative group ${
             isMine ? "chat-bubble-sent" : "chat-bubble-received"
           } ${isOptimistic ? "opacity-60" : "opacity-100"}`}
-          style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)", cursor: "default" }}
+          style={{
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            cursor: "default",
+            minWidth: 0,
+            maxWidth: "100%",
+          }}
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
@@ -526,9 +535,12 @@ function MessageBubble({
             </div>
           ) : (
             <p
-              className="text-sm leading-relaxed break-words"
+              className="text-sm leading-relaxed"
               style={{
                 color: isMine ? "oklch(0.38 0.1 60)" : "oklch(0.38 0.05 65)",
+                wordBreak: "normal",
+                overflowWrap: "break-word",
+                whiteSpace: "normal",
               }}
             >
               {msg.content}
@@ -887,6 +899,7 @@ export default function ChatScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [reactionsVersion, setReactionsVersion] = useState(0);
   const [deletedVersion, setDeletedVersion] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(25);
 
   // Reply state
   const [replyToId, setReplyToId] = useState<string | null>(null);
@@ -960,9 +973,17 @@ export default function ChatScreen() {
     return () => clearInterval(interval);
   }, [actor, sessionId]);
 
-  const sortedMessages = [...messages].sort((a, b) =>
-    Number(a.timestamp - b.timestamp),
+  const allSortedMessages = useMemo(
+    () => [...messages].sort((a, b) => Number(a.timestamp - b.timestamp)),
+    [messages],
   );
+
+  const sortedMessages = useMemo(
+    () => allSortedMessages.slice(-visibleCount),
+    [allSortedMessages, visibleCount],
+  );
+
+  const hasOlderMessages = allSortedMessages.length > visibleCount;
 
   const deletedSet = getDeletedMessages(convId);
   const secretSet = getSecretMessages(convId);
@@ -978,14 +999,20 @@ export default function ChatScreen() {
   }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+    });
   }, []);
+
+  const prevMessageCountRef2 = useRef(sortedMessages.length);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally depend on message count
   useEffect(() => {
-    if (isNearBottom()) {
+    const currentCount = sortedMessages.length;
+    if (currentCount > prevMessageCountRef2.current && isNearBottom()) {
       scrollToBottom("smooth");
     }
+    prevMessageCountRef2.current = currentCount;
   }, [isNearBottom, scrollToBottom, sortedMessages.length]);
 
   useEffect(() => {
@@ -995,14 +1022,23 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, scrollToBottom]);
 
-  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setMessageText(e.target.value);
-    setIsTyping(e.target.value.length > 0);
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    if (e.target.value.length > 0) {
-      typingTimer.current = setTimeout(() => setIsTyping(false), 3000);
-    }
-  }
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      setMessageText(val);
+      // Debounce typing indicator -- don't update on every keystroke
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      if (val.length > 0) {
+        typingTimer.current = setTimeout(() => {
+          setIsTyping(true);
+          typingTimer.current = setTimeout(() => setIsTyping(false), 3000);
+        }, 100);
+      } else {
+        setIsTyping(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     return () => {
@@ -1376,6 +1412,23 @@ export default function ChatScreen() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
+              {hasOlderMessages && (
+                <div className="flex justify-center py-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((c) => c + 25)}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 hover:opacity-80 active:scale-95"
+                    style={{
+                      background: "oklch(0.93 0.06 85)",
+                      color: "oklch(0.45 0.1 65)",
+                      border: "1px solid oklch(0.88 0.06 80)",
+                    }}
+                  >
+                    <ChevronUp className="w-3 h-3" />
+                    Load older messages
+                  </button>
+                </div>
+              )}
               {sortedMessages.map((msg, index) => {
                 const isMine = msg.senderId === currentUserId;
                 const isOptimistic = msg.id.startsWith("optimistic-");
