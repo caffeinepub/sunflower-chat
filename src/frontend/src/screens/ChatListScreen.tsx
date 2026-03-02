@@ -18,11 +18,10 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ConversationView, MessageView } from "../backend.d";
 import DailySurpriseModal from "../components/DailySurpriseModal";
-import ProfileModal from "../components/ProfileModal";
 import { useApp } from "../context/AppContext";
-import { useActor } from "../hooks/useActor";
 import { generateFriendCode, useFriends } from "../hooks/useFriends";
 import type { FriendEntry } from "../hooks/useFriends";
+import { useBackend } from "../services/backendProxy";
 import {
   formatRelativeTime,
   getAvatarColor,
@@ -31,8 +30,6 @@ import {
 import {
   getDailySurpriseShown,
   getDarkMode,
-  getMood,
-  getMoodRingStyle,
   getXP,
   getXpLevel,
   setDailySurpriseShown,
@@ -47,6 +44,17 @@ import {
 type UnreadMap = Record<string, number>;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+function getLocalUserById(id: string): { username: string } | null {
+  try {
+    const raw = localStorage.getItem("sf_local_users");
+    if (!raw) return null;
+    const users = JSON.parse(raw) as Array<{ id: string; username: string }>;
+    return users.find((u) => u.id === id) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function getParticipantInfo(
   conversation: ConversationView,
@@ -66,6 +74,17 @@ function getParticipantInfo(
     .reverse()
     .find((m: MessageView) => m.senderId !== currentUserId);
   if (otherMsg) return { name: otherMsg.senderName, id: otherMsg.senderId };
+
+  // No messages yet -- look up the other participant from local user store
+  const otherParticipantId = conversation.participantIds.find(
+    (id) => id !== currentUserId,
+  );
+  if (otherParticipantId) {
+    const localUser = getLocalUserById(otherParticipantId);
+    if (localUser?.username) {
+      return { name: localUser.username, id: otherParticipantId };
+    }
+  }
 
   const myMsg = conversation.messages[0];
   if (myMsg && myMsg.senderId === currentUserId) {
@@ -384,7 +403,7 @@ function GroupChatModal({
   onCreated,
   sessionId,
 }: GroupChatModalProps) {
-  const { actor } = useActor();
+  const backend = useBackend();
   const [groupName, setGroupName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
@@ -400,10 +419,10 @@ function GroupChatModal({
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!actor || selected.size < 1 || !groupName.trim()) return;
+    if (selected.size < 1 || !groupName.trim()) return;
     setCreating(true);
     try {
-      const convId = await actor.createGroupConversation(
+      const convId = await backend.createGroupConversation(
         sessionId,
         groupName.trim(),
         [...selected],
@@ -577,7 +596,7 @@ interface BroadcastModalProps {
 }
 
 function BroadcastModal({ friends, onClose, sessionId }: BroadcastModalProps) {
-  const { actor } = useActor();
+  const backend = useBackend();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -593,10 +612,10 @@ function BroadcastModal({ friends, onClose, sessionId }: BroadcastModalProps) {
 
   async function handleBroadcast(e: React.FormEvent) {
     e.preventDefault();
-    if (!actor || selected.size < 1 || !message.trim()) return;
+    if (selected.size < 1 || !message.trim()) return;
     setSending(true);
     try {
-      await actor.broadcastMessage(sessionId, [...selected], message.trim());
+      await backend.broadcastMessage(sessionId, [...selected], message.trim());
       toast.success(`📢 Broadcast sent to ${selected.size} friends!`);
       onClose();
     } catch (err) {
@@ -760,14 +779,29 @@ function BroadcastModal({ friends, onClose, sessionId }: BroadcastModalProps) {
 type ActiveTab = "chats" | "friends";
 
 export default function ChatListScreen() {
-  const { actor } = useActor();
+  const backend = useBackend();
   const {
     sessionId,
     profile,
     openConversation,
     clearSession,
     activeConversationId,
+    refreshProfile,
   } = useApp();
+
+  // Refresh profile from backend on mount to ensure currentUserId is always fresh
+  // biome-ignore lint/correctness/useExhaustiveDependencies: backend proxy is stable in behavior
+  useEffect(() => {
+    if (!sessionId) return;
+    backend
+      .getProfile(sessionId)
+      .then((freshProfile) => {
+        refreshProfile(freshProfile);
+      })
+      .catch(() => {
+        // silently ignore - use cached profile
+      });
+  }, [sessionId, refreshProfile]);
   const queryClient = useQueryClient();
 
   const userId = profile?.id ?? "";
@@ -781,18 +815,14 @@ export default function ChatListScreen() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("chats");
   const [showAddFriend, setShowAddFriend] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [showDailySurprise, setShowDailySurprise] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [darkMode, setDarkModeState] = useState(() => getDarkMode());
 
   // XP + level state
-  const [xp, setXpState] = useState(() => getXP(userId));
+  const xp = getXP(userId);
   const level = getXpLevel(xp);
-
-  // Mood
-  const [mood, setMoodState] = useState(() => getMood(userId));
 
   // Pull to refresh
   const [pullY, setPullY] = useState(0);
@@ -824,14 +854,15 @@ export default function ChatListScreen() {
   }, [userId]);
 
   // Update last seen on mount + every 30s
+  // biome-ignore lint/correctness/useExhaustiveDependencies: backend proxy is stable in behavior
   useEffect(() => {
-    if (!actor || !sessionId) return;
-    void actor.updateLastSeen(sessionId);
+    if (!sessionId) return;
+    void backend.updateLastSeen(sessionId);
     const interval = setInterval(() => {
-      void actor.updateLastSeen(sessionId);
+      void backend.updateLastSeen(sessionId);
     }, 30000);
     return () => clearInterval(interval);
-  }, [actor, sessionId]);
+  }, [sessionId]);
 
   function handleToggleDarkMode() {
     const newVal = !darkMode;
@@ -850,10 +881,10 @@ export default function ChatListScreen() {
   } = useQuery<ConversationView[]>({
     queryKey: ["conversations", sessionId],
     queryFn: async () => {
-      if (!actor || !sessionId) return [];
-      return actor.getConversations(sessionId);
+      if (!sessionId) return [];
+      return backend.getConversations(sessionId);
     },
-    enabled: !!actor && !!sessionId,
+    enabled: !!sessionId,
     refetchInterval: 4000,
   });
 
@@ -899,8 +930,8 @@ export default function ChatListScreen() {
       convId,
       pinned,
     }: { convId: string; pinned: boolean }) => {
-      if (!actor || !sessionId) throw new Error("Not authenticated");
-      await actor.pinConversation(sessionId, convId, pinned);
+      if (!sessionId) throw new Error("Not authenticated");
+      await backend.pinConversation(sessionId, convId, pinned);
     },
     onSuccess: (_, { pinned }) => {
       queryClient.invalidateQueries({ queryKey: ["conversations", sessionId] });
@@ -916,8 +947,8 @@ export default function ChatListScreen() {
 
   const createConversation = useMutation({
     mutationFn: async (participantUsername: string) => {
-      if (!actor || !sessionId) throw new Error("Not authenticated");
-      const convId = await actor.createConversation(
+      if (!sessionId) throw new Error("Not authenticated");
+      const convId = await backend.createConversation(
         sessionId,
         participantUsername.trim(),
       );
@@ -946,8 +977,6 @@ export default function ChatListScreen() {
   });
 
   const currentUserId = profile?.id ?? "";
-  const avatarInitials = profile ? getInitials(profile.username) : "?";
-  const moodRingStyle = getMoodRingStyle(mood);
 
   function handleAddFriend(entry: FriendEntry) {
     friendsHook.addFriend(entry);
@@ -969,12 +998,6 @@ export default function ChatListScreen() {
   function handleDailySurpriseClose() {
     if (userId) setDailySurpriseShown(userId);
     setShowDailySurprise(false);
-  }
-
-  function handleProfileUpdated() {
-    setMoodState(getMood(userId));
-    setXpState(getXP(userId));
-    setShowProfile(false);
   }
 
   // ── Pull to refresh ────────────────────────────────────────────────────────
@@ -1126,17 +1149,6 @@ export default function ChatListScreen() {
                   className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
                   style={{ color: "oklch(0.65 0.08 70)" }}
                 />
-              </button>
-
-              {/* Avatar with mood ring */}
-              <button
-                type="button"
-                onClick={() => setShowProfile(true)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold hover:opacity-80 transition-opacity ${getAvatarColor(profile?.username ?? "")}`}
-                title={`${profile?.username ?? "Profile"} — Edit profile`}
-                style={moodRingStyle}
-              >
-                {avatarInitials}
               </button>
 
               <button
@@ -1697,16 +1709,6 @@ export default function ChatListScreen() {
           friends={friends}
           sessionId={sessionId}
           onClose={() => setShowBroadcast(false)}
-        />
-      )}
-
-      {/* Profile Modal */}
-      {showProfile && profile && sessionId && (
-        <ProfileModal
-          profile={profile}
-          sessionId={sessionId}
-          onClose={() => setShowProfile(false)}
-          onProfileUpdated={handleProfileUpdated}
         />
       )}
 

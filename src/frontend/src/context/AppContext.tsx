@@ -32,6 +32,7 @@ interface AppContextValue extends AppState {
     conversationId: string,
     participantName: string,
   ) => void;
+  refreshProfile: (profile: Profile) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -121,6 +122,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const refreshProfile = useCallback((profile: Profile) => {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    setState((prev) => ({ ...prev, profile }));
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -131,6 +137,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         openConversation,
         backToList,
         updateActiveConversation,
+        refreshProfile,
       }}
     >
       {children}

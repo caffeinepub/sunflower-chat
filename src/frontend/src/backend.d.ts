@@ -14,6 +14,7 @@ export interface Profile3 {
     username: string;
     email?: Email;
     avatarColor?: string;
+    avatarUrl?: string;
     hideLastSeen: boolean;
     isPublic: boolean;
     mobile?: Mobile;
@@ -65,6 +66,7 @@ export interface backendInterface {
     sendMessage(sessionId: SessionId, conversationId: ConversationId, content: string, replyToId: string | null, replyPreview: string | null, messageType: string): Promise<void>;
     updateLastSeen(sessionId: SessionId): Promise<void>;
     updateProfile(sessionId: SessionId, username: string, avatarColor: string | null, isPublic: boolean, hideLastSeen: boolean): Promise<void>;
+    updateProfilePicture(sessionId: SessionId, avatarUrl: string): Promise<void>;
     verifyMobileOtp(mobile: string, otp: string): Promise<SessionId>;
     verifyPasswordReset(email: string, otp: string, newPassword: string): Promise<void>;
 }

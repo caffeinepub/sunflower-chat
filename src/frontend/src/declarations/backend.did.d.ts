@@ -10,93 +10,33 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
-export type ConversationId = string;
-export interface ConversationView {
-  'id' : ConversationId,
-  'messages' : Array<MessageView>,
-  'isGroup' : boolean,
-  'participantIds' : Array<UserId>,
-  'groupName' : [] | [string],
-  'isPinned' : boolean,
+export interface _CaffeineStorageCreateCertificateResult {
+  'method' : string,
+  'blob_hash' : string,
 }
-export type Email = string;
-export type MessageId = string;
-export interface MessageView {
-  'id' : MessageId,
-  'deleted' : boolean,
-  'content' : string,
-  'edited' : boolean,
-  'replyPreview' : [] | [string],
-  'messageType' : string,
-  'timestamp' : Time,
-  'senderName' : string,
-  'replyToId' : [] | [string],
-  'reactions' : string,
-  'senderId' : UserId,
+export interface _CaffeineStorageRefillInformation {
+  'proposed_top_up_amount' : [] | [bigint],
 }
-export type Mobile = string;
-export interface Profile3 {
-  'id' : UserId,
-  'username' : string,
-  'email' : [] | [Email],
-  'avatarColor' : [] | [string],
-  'hideLastSeen' : boolean,
-  'isPublic' : boolean,
-  'mobile' : [] | [Mobile],
-  'lastSeen' : Time,
+export interface _CaffeineStorageRefillResult {
+  'success' : [] | [boolean],
+  'topped_up_amount' : [] | [bigint],
 }
-export type SessionId = string;
-export type Time = bigint;
-export type UserId = string;
 export interface _SERVICE {
-  'broadcastMessage' : ActorMethod<
-    [SessionId, Array<string>, string],
+  '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
+  '_caffeineStorageBlobsToDelete' : ActorMethod<[], Array<Uint8Array>>,
+  '_caffeineStorageConfirmBlobDeletion' : ActorMethod<
+    [Array<Uint8Array>],
     undefined
   >,
-  'createConversation' : ActorMethod<[SessionId, string], ConversationId>,
-  'createGroupConversation' : ActorMethod<
-    [SessionId, string, Array<string>],
-    ConversationId
+  '_caffeineStorageCreateCertificate' : ActorMethod<
+    [string],
+    _CaffeineStorageCreateCertificateResult
   >,
-  'deleteMessageForEveryone' : ActorMethod<
-    [SessionId, ConversationId, MessageId],
-    undefined
+  '_caffeineStorageRefillCashier' : ActorMethod<
+    [[] | [_CaffeineStorageRefillInformation]],
+    _CaffeineStorageRefillResult
   >,
-  'editMessage' : ActorMethod<
-    [SessionId, ConversationId, MessageId, string],
-    undefined
-  >,
-  'getConversations' : ActorMethod<[SessionId], Array<ConversationView>>,
-  'getMessages' : ActorMethod<
-    [SessionId, ConversationId, bigint, bigint],
-    Array<MessageView>
-  >,
-  'getProfile' : ActorMethod<[SessionId], Profile3>,
-  'login' : ActorMethod<[string, string], SessionId>,
-  'loginWithMobile' : ActorMethod<[string], string>,
-  'pinConversation' : ActorMethod<
-    [SessionId, ConversationId, boolean],
-    undefined
-  >,
-  'reactToMessage' : ActorMethod<
-    [SessionId, ConversationId, MessageId, string],
-    undefined
-  >,
-  'register' : ActorMethod<[string, string, string], SessionId>,
-  'registerWithMobile' : ActorMethod<[string, string], string>,
-  'requestPasswordReset' : ActorMethod<[string], string>,
-  'seedSampleData' : ActorMethod<[], undefined>,
-  'sendMessage' : ActorMethod<
-    [SessionId, ConversationId, string, [] | [string], [] | [string], string],
-    undefined
-  >,
-  'updateLastSeen' : ActorMethod<[SessionId], undefined>,
-  'updateProfile' : ActorMethod<
-    [SessionId, string, [] | [string], boolean, boolean],
-    undefined
-  >,
-  'verifyMobileOtp' : ActorMethod<[string, string], SessionId>,
-  'verifyPasswordReset' : ActorMethod<[string, string, string], undefined>,
+  '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

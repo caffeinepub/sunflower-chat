@@ -89,484 +89,238 @@ export class ExternalBlob {
         return this;
     }
 }
-export type Mobile = string;
-export type UserId = string;
-export interface Profile3 {
-    id: UserId;
-    username: string;
-    email?: Email;
-    avatarColor?: string;
-    hideLastSeen: boolean;
-    isPublic: boolean;
-    mobile?: Mobile;
-    lastSeen: Time;
+export interface _CaffeineStorageCreateCertificateResult {
+    method: string;
+    blob_hash: string;
 }
-export type Time = bigint;
-export type MessageId = string;
-export interface MessageView {
-    id: MessageId;
-    deleted: boolean;
-    content: string;
-    edited: boolean;
-    replyPreview?: string;
-    messageType: string;
-    timestamp: Time;
-    senderName: string;
-    replyToId?: string;
-    reactions: string;
-    senderId: UserId;
+export interface _CaffeineStorageRefillResult {
+    success?: boolean;
+    topped_up_amount?: bigint;
 }
-export interface ConversationView {
-    id: ConversationId;
-    messages: Array<MessageView>;
-    isGroup: boolean;
-    participantIds: Array<UserId>;
-    groupName?: string;
-    isPinned: boolean;
+export interface _CaffeineStorageRefillInformation {
+    proposed_top_up_amount?: bigint;
 }
-export type SessionId = string;
-export type Email = string;
-export type ConversationId = string;
 export interface backendInterface {
-    broadcastMessage(sessionId: SessionId, participantUsernames: Array<string>, content: string): Promise<void>;
-    createConversation(sessionId: SessionId, participantUsername: string): Promise<ConversationId>;
-    createGroupConversation(sessionId: SessionId, groupName: string, participantUsernames: Array<string>): Promise<ConversationId>;
-    deleteMessageForEveryone(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId): Promise<void>;
-    editMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, newContent: string): Promise<void>;
-    getConversations(sessionId: SessionId): Promise<Array<ConversationView>>;
-    getMessages(sessionId: SessionId, conversationId: ConversationId, page: bigint, pageSize: bigint): Promise<Array<MessageView>>;
-    getProfile(sessionId: SessionId): Promise<Profile3>;
-    login(email: string, password: string): Promise<SessionId>;
+    _caffeineStorageBlobIsLive(hash: Uint8Array): Promise<boolean>;
+    _caffeineStorageBlobsToDelete(): Promise<Array<Uint8Array>>;
+    _caffeineStorageConfirmBlobDeletion(blobs: Array<Uint8Array>): Promise<void>;
+    _caffeineStorageCreateCertificate(blobHash: string): Promise<_CaffeineStorageCreateCertificateResult>;
+    _caffeineStorageRefillCashier(refillInformation: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult>;
+    _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
+    broadcastMessage(sessionId: string, participantUsernames: Array<string>, content: string): Promise<void>;
+    createConversation(sessionId: string, participantUsername: string): Promise<string>;
+    createGroupConversation(sessionId: string, groupName: string, participantUsernames: Array<string>): Promise<string>;
+    deleteMessageForEveryone(sessionId: string, conversationId: string, messageId: string): Promise<void>;
+    editMessage(sessionId: string, conversationId: string, messageId: string, newContent: string): Promise<void>;
+    getConversations(sessionId: string): Promise<Array<any>>;
+    getMessages(sessionId: string, conversationId: string, page: bigint, pageSize: bigint): Promise<Array<any>>;
+    getProfile(sessionId: string): Promise<any>;
+    login(email: string, password: string): Promise<string>;
     loginWithMobile(mobile: string): Promise<string>;
-    pinConversation(sessionId: SessionId, conversationId: ConversationId, pinned: boolean): Promise<void>;
-    reactToMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, emoji: string): Promise<void>;
-    register(username: string, email: string, password: string): Promise<SessionId>;
+    pinConversation(sessionId: string, conversationId: string, pinned: boolean): Promise<void>;
+    reactToMessage(sessionId: string, conversationId: string, messageId: string, emoji: string): Promise<void>;
+    register(username: string, email: string, password: string): Promise<string>;
     registerWithMobile(username: string, mobile: string): Promise<string>;
     requestPasswordReset(email: string): Promise<string>;
     seedSampleData(): Promise<void>;
-    sendMessage(sessionId: SessionId, conversationId: ConversationId, content: string, replyToId: string | null, replyPreview: string | null, messageType: string): Promise<void>;
-    updateLastSeen(sessionId: SessionId): Promise<void>;
-    updateProfile(sessionId: SessionId, username: string, avatarColor: string | null, isPublic: boolean, hideLastSeen: boolean): Promise<void>;
-    verifyMobileOtp(mobile: string, otp: string): Promise<SessionId>;
+    sendMessage(sessionId: string, conversationId: string, content: string, replyToId: string | null, replyPreview: string | null, messageType: string): Promise<void>;
+    updateLastSeen(sessionId: string): Promise<void>;
+    updateProfile(sessionId: string, username: string, avatarColor: string | null, isPublic: boolean, hideLastSeen: boolean): Promise<void>;
+    updateProfilePicture(sessionId: string, avatarUrl: string): Promise<void>;
+    verifyMobileOtp(mobile: string, otp: string): Promise<string>;
     verifyPasswordReset(email: string, otp: string, newPassword: string): Promise<void>;
 }
-import type { ConversationId as _ConversationId, ConversationView as _ConversationView, Email as _Email, MessageId as _MessageId, MessageView as _MessageView, Mobile as _Mobile, Profile3 as _Profile3, Time as _Time, UserId as _UserId } from "./declarations/backend.did.d.ts";
+import type { _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
-    async broadcastMessage(arg0: SessionId, arg1: Array<string>, arg2: string): Promise<void> {
+    async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
         if (this.processError) {
             try {
-                const result = await this.actor.broadcastMessage(arg0, arg1, arg2);
+                const result = await this.actor._caffeineStorageBlobIsLive(arg0);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.broadcastMessage(arg0, arg1, arg2);
+            const result = await this.actor._caffeineStorageBlobIsLive(arg0);
             return result;
         }
     }
-    async createConversation(arg0: SessionId, arg1: string): Promise<ConversationId> {
+    async _caffeineStorageBlobsToDelete(): Promise<Array<Uint8Array>> {
         if (this.processError) {
             try {
-                const result = await this.actor.createConversation(arg0, arg1);
+                const result = await this.actor._caffeineStorageBlobsToDelete();
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createConversation(arg0, arg1);
+            const result = await this.actor._caffeineStorageBlobsToDelete();
             return result;
         }
     }
-    async createGroupConversation(arg0: SessionId, arg1: string, arg2: Array<string>): Promise<ConversationId> {
+    async _caffeineStorageConfirmBlobDeletion(arg0: Array<Uint8Array>): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.createGroupConversation(arg0, arg1, arg2);
+                const result = await this.actor._caffeineStorageConfirmBlobDeletion(arg0);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createGroupConversation(arg0, arg1, arg2);
+            const result = await this.actor._caffeineStorageConfirmBlobDeletion(arg0);
             return result;
         }
     }
-    async deleteMessageForEveryone(arg0: SessionId, arg1: ConversationId, arg2: MessageId): Promise<void> {
+    async _caffeineStorageCreateCertificate(arg0: string): Promise<_CaffeineStorageCreateCertificateResult> {
         if (this.processError) {
             try {
-                const result = await this.actor.deleteMessageForEveryone(arg0, arg1, arg2);
+                const result = await this.actor._caffeineStorageCreateCertificate(arg0);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.deleteMessageForEveryone(arg0, arg1, arg2);
+            const result = await this.actor._caffeineStorageCreateCertificate(arg0);
             return result;
         }
     }
-    async editMessage(arg0: SessionId, arg1: ConversationId, arg2: MessageId, arg3: string): Promise<void> {
+    async _caffeineStorageRefillCashier(arg0: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult> {
         if (this.processError) {
             try {
-                const result = await this.actor.editMessage(arg0, arg1, arg2, arg3);
+                const result = await this.actor._caffeineStorageRefillCashier(to_candid_opt_n1(this._uploadFile, this._downloadFile, arg0));
+                return from_candid__CaffeineStorageRefillResult_n4(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor._caffeineStorageRefillCashier(to_candid_opt_n1(this._uploadFile, this._downloadFile, arg0));
+            return from_candid__CaffeineStorageRefillResult_n4(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async _caffeineStorageUpdateGatewayPrincipals(): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor._caffeineStorageUpdateGatewayPrincipals();
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.editMessage(arg0, arg1, arg2, arg3);
+            const result = await this.actor._caffeineStorageUpdateGatewayPrincipals();
             return result;
         }
     }
-    async getConversations(arg0: SessionId): Promise<Array<ConversationView>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getConversations(arg0);
-                return from_candid_vec_n1(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getConversations(arg0);
-            return from_candid_vec_n1(this._uploadFile, this._downloadFile, result);
-        }
+    async broadcastMessage(sessionId: string, participantUsernames: Array<string>, content: string): Promise<void> {
+        return (this.actor as any).broadcastMessage(sessionId, participantUsernames, content);
     }
-    async getMessages(arg0: SessionId, arg1: ConversationId, arg2: bigint, arg3: bigint): Promise<Array<MessageView>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getMessages(arg0, arg1, arg2, arg3);
-                return from_candid_vec_n4(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getMessages(arg0, arg1, arg2, arg3);
-            return from_candid_vec_n4(this._uploadFile, this._downloadFile, result);
-        }
+    async createConversation(sessionId: string, participantUsername: string): Promise<string> {
+        return (this.actor as any).createConversation(sessionId, participantUsername);
     }
-    async getProfile(arg0: SessionId): Promise<Profile3> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getProfile(arg0);
-                return from_candid_Profile3_n8(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getProfile(arg0);
-            return from_candid_Profile3_n8(this._uploadFile, this._downloadFile, result);
-        }
+    async createGroupConversation(sessionId: string, groupName: string, participantUsernames: Array<string>): Promise<string> {
+        return (this.actor as any).createGroupConversation(sessionId, groupName, participantUsernames);
     }
-    async login(arg0: string, arg1: string): Promise<SessionId> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.login(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.login(arg0, arg1);
-            return result;
-        }
+    async deleteMessageForEveryone(sessionId: string, conversationId: string, messageId: string): Promise<void> {
+        return (this.actor as any).deleteMessageForEveryone(sessionId, conversationId, messageId);
     }
-    async loginWithMobile(arg0: string): Promise<string> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.loginWithMobile(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.loginWithMobile(arg0);
-            return result;
-        }
+    async editMessage(sessionId: string, conversationId: string, messageId: string, newContent: string): Promise<void> {
+        return (this.actor as any).editMessage(sessionId, conversationId, messageId, newContent);
     }
-    async pinConversation(arg0: SessionId, arg1: ConversationId, arg2: boolean): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.pinConversation(arg0, arg1, arg2);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.pinConversation(arg0, arg1, arg2);
-            return result;
-        }
+    async getConversations(sessionId: string): Promise<Array<any>> {
+        return (this.actor as any).getConversations(sessionId);
     }
-    async reactToMessage(arg0: SessionId, arg1: ConversationId, arg2: MessageId, arg3: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.reactToMessage(arg0, arg1, arg2, arg3);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.reactToMessage(arg0, arg1, arg2, arg3);
-            return result;
-        }
+    async getMessages(sessionId: string, conversationId: string, page: bigint, pageSize: bigint): Promise<Array<any>> {
+        return (this.actor as any).getMessages(sessionId, conversationId, page, pageSize);
     }
-    async register(arg0: string, arg1: string, arg2: string): Promise<SessionId> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.register(arg0, arg1, arg2);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.register(arg0, arg1, arg2);
-            return result;
-        }
+    async getProfile(sessionId: string): Promise<any> {
+        return (this.actor as any).getProfile(sessionId);
     }
-    async registerWithMobile(arg0: string, arg1: string): Promise<string> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.registerWithMobile(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.registerWithMobile(arg0, arg1);
-            return result;
-        }
+    async login(email: string, password: string): Promise<string> {
+        return (this.actor as any).login(email, password);
     }
-    async requestPasswordReset(arg0: string): Promise<string> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.requestPasswordReset(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.requestPasswordReset(arg0);
-            return result;
-        }
+    async loginWithMobile(mobile: string): Promise<string> {
+        return (this.actor as any).loginWithMobile(mobile);
+    }
+    async pinConversation(sessionId: string, conversationId: string, pinned: boolean): Promise<void> {
+        return (this.actor as any).pinConversation(sessionId, conversationId, pinned);
+    }
+    async reactToMessage(sessionId: string, conversationId: string, messageId: string, emoji: string): Promise<void> {
+        return (this.actor as any).reactToMessage(sessionId, conversationId, messageId, emoji);
+    }
+    async register(username: string, email: string, password: string): Promise<string> {
+        return (this.actor as any).register(username, email, password);
+    }
+    async registerWithMobile(username: string, mobile: string): Promise<string> {
+        return (this.actor as any).registerWithMobile(username, mobile);
+    }
+    async requestPasswordReset(email: string): Promise<string> {
+        return (this.actor as any).requestPasswordReset(email);
     }
     async seedSampleData(): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.seedSampleData();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.seedSampleData();
-            return result;
-        }
+        return (this.actor as any).seedSampleData();
     }
-    async sendMessage(arg0: SessionId, arg1: ConversationId, arg2: string, arg3: string | null, arg4: string | null, arg5: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.sendMessage(arg0, arg1, arg2, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg3), to_candid_opt_n12(this._uploadFile, this._downloadFile, arg4), arg5);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.sendMessage(arg0, arg1, arg2, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg3), to_candid_opt_n12(this._uploadFile, this._downloadFile, arg4), arg5);
-            return result;
-        }
+    async sendMessage(sessionId: string, conversationId: string, content: string, replyToId: string | null, replyPreview: string | null, messageType: string): Promise<void> {
+        const toOpt = (v: string | null) => v === null ? [] : [v];
+        return (this.actor as any).sendMessage(sessionId, conversationId, content, toOpt(replyToId), toOpt(replyPreview), messageType);
     }
-    async updateLastSeen(arg0: SessionId): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.updateLastSeen(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.updateLastSeen(arg0);
-            return result;
-        }
+    async updateLastSeen(sessionId: string): Promise<void> {
+        return (this.actor as any).updateLastSeen(sessionId);
     }
-    async updateProfile(arg0: SessionId, arg1: string, arg2: string | null, arg3: boolean, arg4: boolean): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.updateProfile(arg0, arg1, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg2), arg3, arg4);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.updateProfile(arg0, arg1, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg2), arg3, arg4);
-            return result;
-        }
+    async updateProfile(sessionId: string, username: string, avatarColor: string | null, isPublic: boolean, hideLastSeen: boolean): Promise<void> {
+        const toOpt = (v: string | null) => v === null ? [] : [v];
+        return (this.actor as any).updateProfile(sessionId, username, toOpt(avatarColor), isPublic, hideLastSeen);
     }
-    async verifyMobileOtp(arg0: string, arg1: string): Promise<SessionId> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.verifyMobileOtp(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.verifyMobileOtp(arg0, arg1);
-            return result;
-        }
+    async updateProfilePicture(sessionId: string, avatarUrl: string): Promise<void> {
+        return (this.actor as any).updateProfilePicture(sessionId, avatarUrl);
     }
-    async verifyPasswordReset(arg0: string, arg1: string, arg2: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.verifyPasswordReset(arg0, arg1, arg2);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.verifyPasswordReset(arg0, arg1, arg2);
-            return result;
-        }
+    async verifyMobileOtp(mobile: string, otp: string): Promise<string> {
+        return (this.actor as any).verifyMobileOtp(mobile, otp);
+    }
+    async verifyPasswordReset(email: string, otp: string, newPassword: string): Promise<void> {
+        return (this.actor as any).verifyPasswordReset(email, otp, newPassword);
     }
 }
-function from_candid_ConversationView_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _ConversationView): ConversationView {
-    return from_candid_record_n3(_uploadFile, _downloadFile, value);
+function from_candid__CaffeineStorageRefillResult_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: __CaffeineStorageRefillResult): _CaffeineStorageRefillResult {
+    return from_candid_record_n5(_uploadFile, _downloadFile, value);
 }
-function from_candid_MessageView_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _MessageView): MessageView {
-    return from_candid_record_n6(_uploadFile, _downloadFile, value);
-}
-function from_candid_Profile3_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Profile3): Profile3 {
-    return from_candid_record_n9(_uploadFile, _downloadFile, value);
-}
-function from_candid_opt_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Email]): Email | null {
+function from_candid_opt_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [boolean]): boolean | null {
     return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Mobile]): Mobile | null {
+function from_candid_opt_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [bigint]): bigint | null {
     return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [string]): string | null {
-    return value.length === 0 ? null : value[0];
-}
-function from_candid_record_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    id: _ConversationId;
-    messages: Array<_MessageView>;
-    isGroup: boolean;
-    participantIds: Array<_UserId>;
-    groupName: [] | [string];
-    isPinned: boolean;
+function from_candid_record_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    success: [] | [boolean];
+    topped_up_amount: [] | [bigint];
 }): {
-    id: ConversationId;
-    messages: Array<MessageView>;
-    isGroup: boolean;
-    participantIds: Array<UserId>;
-    groupName?: string;
-    isPinned: boolean;
+    success?: boolean;
+    topped_up_amount?: bigint;
 } {
     return {
-        id: value.id,
-        messages: from_candid_vec_n4(_uploadFile, _downloadFile, value.messages),
-        isGroup: value.isGroup,
-        participantIds: value.participantIds,
-        groupName: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.groupName)),
-        isPinned: value.isPinned
+        success: record_opt_to_undefined(from_candid_opt_n6(_uploadFile, _downloadFile, value.success)),
+        topped_up_amount: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.topped_up_amount))
     };
 }
-function from_candid_record_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    id: _MessageId;
-    deleted: boolean;
-    content: string;
-    edited: boolean;
-    replyPreview: [] | [string];
-    messageType: string;
-    timestamp: _Time;
-    senderName: string;
-    replyToId: [] | [string];
-    reactions: string;
-    senderId: _UserId;
+function to_candid__CaffeineStorageRefillInformation_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CaffeineStorageRefillInformation): __CaffeineStorageRefillInformation {
+    return to_candid_record_n3(_uploadFile, _downloadFile, value);
+}
+function to_candid_opt_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CaffeineStorageRefillInformation | null): [] | [__CaffeineStorageRefillInformation] {
+    return value === null ? candid_none() : candid_some(to_candid__CaffeineStorageRefillInformation_n2(_uploadFile, _downloadFile, value));
+}
+function to_candid_record_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    proposed_top_up_amount?: bigint;
 }): {
-    id: MessageId;
-    deleted: boolean;
-    content: string;
-    edited: boolean;
-    replyPreview?: string;
-    messageType: string;
-    timestamp: Time;
-    senderName: string;
-    replyToId?: string;
-    reactions: string;
-    senderId: UserId;
+    proposed_top_up_amount: [] | [bigint];
 } {
     return {
-        id: value.id,
-        deleted: value.deleted,
-        content: value.content,
-        edited: value.edited,
-        replyPreview: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.replyPreview)),
-        messageType: value.messageType,
-        timestamp: value.timestamp,
-        senderName: value.senderName,
-        replyToId: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.replyToId)),
-        reactions: value.reactions,
-        senderId: value.senderId
+        proposed_top_up_amount: value.proposed_top_up_amount ? candid_some(value.proposed_top_up_amount) : candid_none()
     };
-}
-function from_candid_record_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    id: _UserId;
-    username: string;
-    email: [] | [_Email];
-    avatarColor: [] | [string];
-    hideLastSeen: boolean;
-    isPublic: boolean;
-    mobile: [] | [_Mobile];
-    lastSeen: _Time;
-}): {
-    id: UserId;
-    username: string;
-    email?: Email;
-    avatarColor?: string;
-    hideLastSeen: boolean;
-    isPublic: boolean;
-    mobile?: Mobile;
-    lastSeen: Time;
-} {
-    return {
-        id: value.id,
-        username: value.username,
-        email: record_opt_to_undefined(from_candid_opt_n10(_uploadFile, _downloadFile, value.email)),
-        avatarColor: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.avatarColor)),
-        hideLastSeen: value.hideLastSeen,
-        isPublic: value.isPublic,
-        mobile: record_opt_to_undefined(from_candid_opt_n11(_uploadFile, _downloadFile, value.mobile)),
-        lastSeen: value.lastSeen
-    };
-}
-function from_candid_vec_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_ConversationView>): Array<ConversationView> {
-    return value.map((x)=>from_candid_ConversationView_n2(_uploadFile, _downloadFile, x));
-}
-function from_candid_vec_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_MessageView>): Array<MessageView> {
-    return value.map((x)=>from_candid_MessageView_n5(_uploadFile, _downloadFile, x));
-}
-function to_candid_opt_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: string | null): [] | [string] {
-    return value === null ? candid_none() : candid_some(value);
 }
 export interface CreateActorOptions {
     agent?: Agent;

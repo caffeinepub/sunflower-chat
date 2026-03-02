@@ -8,223 +8,89 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const SessionId = IDL.Text;
-export const ConversationId = IDL.Text;
-export const MessageId = IDL.Text;
-export const Time = IDL.Int;
-export const UserId = IDL.Text;
-export const MessageView = IDL.Record({
-  'id' : MessageId,
-  'deleted' : IDL.Bool,
-  'content' : IDL.Text,
-  'edited' : IDL.Bool,
-  'replyPreview' : IDL.Opt(IDL.Text),
-  'messageType' : IDL.Text,
-  'timestamp' : Time,
-  'senderName' : IDL.Text,
-  'replyToId' : IDL.Opt(IDL.Text),
-  'reactions' : IDL.Text,
-  'senderId' : UserId,
+export const _CaffeineStorageCreateCertificateResult = IDL.Record({
+  'method' : IDL.Text,
+  'blob_hash' : IDL.Text,
 });
-export const ConversationView = IDL.Record({
-  'id' : ConversationId,
-  'messages' : IDL.Vec(MessageView),
-  'isGroup' : IDL.Bool,
-  'participantIds' : IDL.Vec(UserId),
-  'groupName' : IDL.Opt(IDL.Text),
-  'isPinned' : IDL.Bool,
+export const _CaffeineStorageRefillInformation = IDL.Record({
+  'proposed_top_up_amount' : IDL.Opt(IDL.Nat),
 });
-export const Email = IDL.Text;
-export const Mobile = IDL.Text;
-export const Profile3 = IDL.Record({
-  'id' : UserId,
-  'username' : IDL.Text,
-  'email' : IDL.Opt(Email),
-  'avatarColor' : IDL.Opt(IDL.Text),
-  'hideLastSeen' : IDL.Bool,
-  'isPublic' : IDL.Bool,
-  'mobile' : IDL.Opt(Mobile),
-  'lastSeen' : Time,
+export const _CaffeineStorageRefillResult = IDL.Record({
+  'success' : IDL.Opt(IDL.Bool),
+  'topped_up_amount' : IDL.Opt(IDL.Nat),
 });
 
 export const idlService = IDL.Service({
-  'broadcastMessage' : IDL.Func(
-      [SessionId, IDL.Vec(IDL.Text), IDL.Text],
-      [],
-      [],
-    ),
-  'createConversation' : IDL.Func([SessionId, IDL.Text], [ConversationId], []),
-  'createGroupConversation' : IDL.Func(
-      [SessionId, IDL.Text, IDL.Vec(IDL.Text)],
-      [ConversationId],
-      [],
-    ),
-  'deleteMessageForEveryone' : IDL.Func(
-      [SessionId, ConversationId, MessageId],
-      [],
-      [],
-    ),
-  'editMessage' : IDL.Func(
-      [SessionId, ConversationId, MessageId, IDL.Text],
-      [],
-      [],
-    ),
-  'getConversations' : IDL.Func(
-      [SessionId],
-      [IDL.Vec(ConversationView)],
+  '_caffeineStorageBlobIsLive' : IDL.Func(
+      [IDL.Vec(IDL.Nat8)],
+      [IDL.Bool],
       ['query'],
     ),
-  'getMessages' : IDL.Func(
-      [SessionId, ConversationId, IDL.Nat, IDL.Nat],
-      [IDL.Vec(MessageView)],
+  '_caffeineStorageBlobsToDelete' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Vec(IDL.Nat8))],
       ['query'],
     ),
-  'getProfile' : IDL.Func([SessionId], [Profile3], ['query']),
-  'login' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
-  'loginWithMobile' : IDL.Func([IDL.Text], [IDL.Text], []),
-  'pinConversation' : IDL.Func([SessionId, ConversationId, IDL.Bool], [], []),
-  'reactToMessage' : IDL.Func(
-      [SessionId, ConversationId, MessageId, IDL.Text],
+  '_caffeineStorageConfirmBlobDeletion' : IDL.Func(
+      [IDL.Vec(IDL.Vec(IDL.Nat8))],
       [],
       [],
     ),
-  'register' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [SessionId], []),
-  'registerWithMobile' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
-  'requestPasswordReset' : IDL.Func([IDL.Text], [IDL.Text], []),
-  'seedSampleData' : IDL.Func([], [], []),
-  'sendMessage' : IDL.Func(
-      [
-        SessionId,
-        ConversationId,
-        IDL.Text,
-        IDL.Opt(IDL.Text),
-        IDL.Opt(IDL.Text),
-        IDL.Text,
-      ],
-      [],
+  '_caffeineStorageCreateCertificate' : IDL.Func(
+      [IDL.Text],
+      [_CaffeineStorageCreateCertificateResult],
       [],
     ),
-  'updateLastSeen' : IDL.Func([SessionId], [], []),
-  'updateProfile' : IDL.Func(
-      [SessionId, IDL.Text, IDL.Opt(IDL.Text), IDL.Bool, IDL.Bool],
-      [],
+  '_caffeineStorageRefillCashier' : IDL.Func(
+      [IDL.Opt(_CaffeineStorageRefillInformation)],
+      [_CaffeineStorageRefillResult],
       [],
     ),
-  'verifyMobileOtp' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
-  'verifyPasswordReset' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+  '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
 });
 
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
-  const SessionId = IDL.Text;
-  const ConversationId = IDL.Text;
-  const MessageId = IDL.Text;
-  const Time = IDL.Int;
-  const UserId = IDL.Text;
-  const MessageView = IDL.Record({
-    'id' : MessageId,
-    'deleted' : IDL.Bool,
-    'content' : IDL.Text,
-    'edited' : IDL.Bool,
-    'replyPreview' : IDL.Opt(IDL.Text),
-    'messageType' : IDL.Text,
-    'timestamp' : Time,
-    'senderName' : IDL.Text,
-    'replyToId' : IDL.Opt(IDL.Text),
-    'reactions' : IDL.Text,
-    'senderId' : UserId,
+  const _CaffeineStorageCreateCertificateResult = IDL.Record({
+    'method' : IDL.Text,
+    'blob_hash' : IDL.Text,
   });
-  const ConversationView = IDL.Record({
-    'id' : ConversationId,
-    'messages' : IDL.Vec(MessageView),
-    'isGroup' : IDL.Bool,
-    'participantIds' : IDL.Vec(UserId),
-    'groupName' : IDL.Opt(IDL.Text),
-    'isPinned' : IDL.Bool,
+  const _CaffeineStorageRefillInformation = IDL.Record({
+    'proposed_top_up_amount' : IDL.Opt(IDL.Nat),
   });
-  const Email = IDL.Text;
-  const Mobile = IDL.Text;
-  const Profile3 = IDL.Record({
-    'id' : UserId,
-    'username' : IDL.Text,
-    'email' : IDL.Opt(Email),
-    'avatarColor' : IDL.Opt(IDL.Text),
-    'hideLastSeen' : IDL.Bool,
-    'isPublic' : IDL.Bool,
-    'mobile' : IDL.Opt(Mobile),
-    'lastSeen' : Time,
+  const _CaffeineStorageRefillResult = IDL.Record({
+    'success' : IDL.Opt(IDL.Bool),
+    'topped_up_amount' : IDL.Opt(IDL.Nat),
   });
   
   return IDL.Service({
-    'broadcastMessage' : IDL.Func(
-        [SessionId, IDL.Vec(IDL.Text), IDL.Text],
-        [],
-        [],
-      ),
-    'createConversation' : IDL.Func(
-        [SessionId, IDL.Text],
-        [ConversationId],
-        [],
-      ),
-    'createGroupConversation' : IDL.Func(
-        [SessionId, IDL.Text, IDL.Vec(IDL.Text)],
-        [ConversationId],
-        [],
-      ),
-    'deleteMessageForEveryone' : IDL.Func(
-        [SessionId, ConversationId, MessageId],
-        [],
-        [],
-      ),
-    'editMessage' : IDL.Func(
-        [SessionId, ConversationId, MessageId, IDL.Text],
-        [],
-        [],
-      ),
-    'getConversations' : IDL.Func(
-        [SessionId],
-        [IDL.Vec(ConversationView)],
+    '_caffeineStorageBlobIsLive' : IDL.Func(
+        [IDL.Vec(IDL.Nat8)],
+        [IDL.Bool],
         ['query'],
       ),
-    'getMessages' : IDL.Func(
-        [SessionId, ConversationId, IDL.Nat, IDL.Nat],
-        [IDL.Vec(MessageView)],
+    '_caffeineStorageBlobsToDelete' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Vec(IDL.Nat8))],
         ['query'],
       ),
-    'getProfile' : IDL.Func([SessionId], [Profile3], ['query']),
-    'login' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
-    'loginWithMobile' : IDL.Func([IDL.Text], [IDL.Text], []),
-    'pinConversation' : IDL.Func([SessionId, ConversationId, IDL.Bool], [], []),
-    'reactToMessage' : IDL.Func(
-        [SessionId, ConversationId, MessageId, IDL.Text],
+    '_caffeineStorageConfirmBlobDeletion' : IDL.Func(
+        [IDL.Vec(IDL.Vec(IDL.Nat8))],
         [],
         [],
       ),
-    'register' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [SessionId], []),
-    'registerWithMobile' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
-    'requestPasswordReset' : IDL.Func([IDL.Text], [IDL.Text], []),
-    'seedSampleData' : IDL.Func([], [], []),
-    'sendMessage' : IDL.Func(
-        [
-          SessionId,
-          ConversationId,
-          IDL.Text,
-          IDL.Opt(IDL.Text),
-          IDL.Opt(IDL.Text),
-          IDL.Text,
-        ],
-        [],
+    '_caffeineStorageCreateCertificate' : IDL.Func(
+        [IDL.Text],
+        [_CaffeineStorageCreateCertificateResult],
         [],
       ),
-    'updateLastSeen' : IDL.Func([SessionId], [], []),
-    'updateProfile' : IDL.Func(
-        [SessionId, IDL.Text, IDL.Opt(IDL.Text), IDL.Bool, IDL.Bool],
-        [],
+    '_caffeineStorageRefillCashier' : IDL.Func(
+        [IDL.Opt(_CaffeineStorageRefillInformation)],
+        [_CaffeineStorageRefillResult],
         [],
       ),
-    'verifyMobileOtp' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
-    'verifyPasswordReset' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+    '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   });
 };
 

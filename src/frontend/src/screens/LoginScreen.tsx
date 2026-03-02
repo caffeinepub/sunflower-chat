@@ -2,7 +2,7 @@ import { CheckCircle, ChevronLeft, Loader2, Mail, Phone } from "lucide-react";
 import { useState } from "react";
 import type { Profile3 } from "../backend.d";
 import { useApp } from "../context/AppContext";
-import { useActor } from "../hooks/useActor";
+import { useBackend } from "../services/backendProxy";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +152,7 @@ function TabPills({
 // ─── Forgot Password Flow ───────────────────────────────────────────────────
 
 function ForgotPasswordFlow({ onBack }: { onBack: () => void }) {
-  const { actor } = useActor();
+  const backend = useBackend();
   const [step, setStep] = useState<ForgotStep>("enterEmail");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -164,11 +164,10 @@ function ForgotPasswordFlow({ onBack }: { onBack: () => void }) {
 
   const requestReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setError(null);
     setLoading(true);
     try {
-      const receivedOtp = await actor.requestPasswordReset(email.trim());
+      const receivedOtp = await backend.requestPasswordReset(email.trim());
       setDisplayOtp(receivedOtp);
       setStep("verifyOtp");
     } catch (err) {
@@ -181,11 +180,10 @@ function ForgotPasswordFlow({ onBack }: { onBack: () => void }) {
 
   const verifyReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setError(null);
     setLoading(true);
     try {
-      await actor.verifyPasswordReset(email.trim(), otp.trim(), newPassword);
+      await backend.verifyPasswordReset(email.trim(), otp.trim(), newPassword);
       setSuccess(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -326,7 +324,7 @@ function EmailLoginFlow({
 }: {
   onSuccess: (sessionId: string, profile: Profile3) => void;
 }) {
-  const { actor } = useActor();
+  const backend = useBackend();
   const [mode, setMode] = useState<EmailMode>("login");
   const [showForgot, setShowForgot] = useState(false);
   const [email, setEmail] = useState("");
@@ -337,27 +335,25 @@ function EmailLoginFlow({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setError(null);
     setLoading(true);
     try {
       let sessionId: string;
       if (mode === "register") {
-        // register now returns a sessionId directly
-        sessionId = await actor.register(
+        sessionId = await backend.register(
           username.trim(),
           email.trim(),
           password,
         );
       } else {
-        sessionId = await actor.login(email.trim(), password);
+        sessionId = await backend.login(email.trim(), password);
       }
       try {
-        await actor.seedSampleData();
+        await backend.seedSampleData();
       } catch {
         // Not critical
       }
-      const profile = await actor.getProfile(sessionId);
+      const profile = await backend.getProfile(sessionId);
       onSuccess(sessionId, profile);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -498,7 +494,7 @@ function MobileLoginFlow({
 }: {
   onSuccess: (sessionId: string, profile: Profile3) => void;
 }) {
-  const { actor } = useActor();
+  const backend = useBackend();
   const [step, setStep] = useState<MobileStep>("enterPhone");
   const [mobile, setMobile] = useState("");
   const [username, setUsername] = useState("");
@@ -510,11 +506,10 @@ function MobileLoginFlow({
 
   const handleGetOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setError(null);
     setLoading(true);
     try {
-      const receivedOtp = await actor.loginWithMobile(mobile.trim());
+      const receivedOtp = await backend.loginWithMobile(mobile.trim());
       setDisplayOtp(receivedOtp);
       setNeedsRegister(false);
       setStep("verifyOtp");
@@ -540,11 +535,10 @@ function MobileLoginFlow({
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setError(null);
     setLoading(true);
     try {
-      const receivedOtp = await actor.registerWithMobile(
+      const receivedOtp = await backend.registerWithMobile(
         username.trim(),
         mobile.trim(),
       );
@@ -561,12 +555,14 @@ function MobileLoginFlow({
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setError(null);
     setLoading(true);
     try {
-      const sessionId = await actor.verifyMobileOtp(mobile.trim(), otp.trim());
-      const profile = await actor.getProfile(sessionId);
+      const sessionId = await backend.verifyMobileOtp(
+        mobile.trim(),
+        otp.trim(),
+      );
+      const profile = await backend.getProfile(sessionId);
       onSuccess(sessionId, profile);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

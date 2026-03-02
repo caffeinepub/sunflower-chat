@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { MessageView } from "../backend.d";
 import { useApp } from "../context/AppContext";
-import { useActor } from "../hooks/useActor";
+import { useBackend } from "../services/backendProxy";
 import {
   formatMessageTime,
   getAvatarColor,
@@ -885,13 +885,14 @@ function VoiceRecorder({ onSend, onClose }: VoiceRecorderProps) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
-  const { actor } = useActor();
+  const backend = useBackend();
   const {
     sessionId,
     profile,
     activeConversationId,
     activeConversationName,
     backToList,
+    refreshProfile,
   } = useApp();
   const queryClient = useQueryClient();
 
@@ -924,8 +925,48 @@ export default function ChatScreen() {
 
   const convId = activeConversationId ?? "";
   const participantName = activeConversationName ?? "Chat";
-  const currentUserId = profile?.id ?? "";
-  const currentUserName = profile?.username ?? "";
+
+  // Compute currentUserId with multi-source fallback so it's populated immediately
+  // on first render, even before the async getProfile call completes.
+  // Priority: context profile → localStorage profile → empty string
+  const profileFromStorage = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("sunflower_profile");
+      if (!raw) return null;
+      return JSON.parse(raw) as { id?: string; username?: string } | null;
+    } catch {
+      return null;
+    }
+  }, []); // computed once on mount; refreshes when context profile changes
+
+  const currentUserId = useMemo(() => {
+    const fromContext = String(profile?.id ?? "").trim();
+    if (fromContext) return fromContext;
+    return String(profileFromStorage?.id ?? "").trim();
+  }, [profile?.id, profileFromStorage]);
+
+  const currentUserName =
+    profile?.username ?? profileFromStorage?.username ?? "";
+
+  // Keep a ref so optimistic messages and callbacks always have the latest value
+  const currentUserIdRef = useRef<string>(currentUserId);
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
+
+  // Refresh profile from backend on mount to ensure currentUserId is always accurate
+  // biome-ignore lint/correctness/useExhaustiveDependencies: backend proxy is stable in behavior
+  useEffect(() => {
+    if (!sessionId) return;
+    backend
+      .getProfile(sessionId)
+      .then((freshProfile) => {
+        refreshProfile(freshProfile);
+      })
+      .catch(() => {
+        // silently ignore - use cached profile
+      });
+  }, [sessionId, refreshProfile]);
 
   // Debug: log currentUserId so alignment comparisons can be verified in DevTools
   useEffect(() => {
@@ -940,10 +981,10 @@ export default function ChatScreen() {
   const { data: messages = [], isLoading } = useQuery<MessageView[]>({
     queryKey: ["messages", sessionId, convId],
     queryFn: async () => {
-      if (!actor || !sessionId || !convId) return [];
-      return actor.getMessages(sessionId, convId, 0n, 50n);
+      if (!sessionId || !convId) return [];
+      return backend.getMessages(sessionId, convId, 0n, 50n);
     },
-    enabled: !!actor && !!sessionId && !!convId,
+    enabled: !!sessionId && !!convId,
     refetchInterval: 1500,
   });
 
@@ -973,14 +1014,15 @@ export default function ChatScreen() {
   }, [messages, currentUserId]);
 
   // Update last seen on mount + every 30s
+  // biome-ignore lint/correctness/useExhaustiveDependencies: backend proxy is stable in behavior
   useEffect(() => {
-    if (!actor || !sessionId) return;
-    void actor.updateLastSeen(sessionId);
+    if (!sessionId) return;
+    void backend.updateLastSeen(sessionId);
     const interval = setInterval(() => {
-      void actor.updateLastSeen(sessionId);
+      void backend.updateLastSeen(sessionId);
     }, 30000);
     return () => clearInterval(interval);
-  }, [actor, sessionId]);
+  }, [sessionId]);
 
   const allSortedMessages = useMemo(
     () => [...messages].sort((a, b) => Number(a.timestamp - b.timestamp)),
@@ -1015,7 +1057,6 @@ export default function ChatScreen() {
 
   const prevMessageCountRef2 = useRef(sortedMessages.length);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally depend on message count
   useEffect(() => {
     const currentCount = sortedMessages.length;
     if (currentCount > prevMessageCountRef2.current && isNearBottom()) {
@@ -1068,8 +1109,8 @@ export default function ChatScreen() {
       replyPrev: string | null;
       msgType: string;
     }) => {
-      if (!actor || !sessionId || !convId) throw new Error("Not ready");
-      await actor.sendMessage(
+      if (!sessionId || !convId) throw new Error("Not ready");
+      await backend.sendMessage(
         sessionId,
         convId,
         content,
@@ -1094,7 +1135,7 @@ export default function ChatScreen() {
       const optimisticMessage: MessageView = {
         id: optimisticId,
         content,
-        senderId: currentUserId,
+        senderId: String(currentUserId).trim(),
         senderName: currentUserName,
         timestamp: BigInt(Date.now()) * 1_000_000n,
         edited: false,
@@ -1155,8 +1196,8 @@ export default function ChatScreen() {
       msgId,
       newContent,
     }: { msgId: string; newContent: string }) => {
-      if (!actor || !sessionId || !convId) throw new Error("Not ready");
-      await actor.editMessage(sessionId, convId, msgId, newContent);
+      if (!sessionId || !convId) throw new Error("Not ready");
+      await backend.editMessage(sessionId, convId, msgId, newContent);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -1173,8 +1214,8 @@ export default function ChatScreen() {
   // ── Delete mutation ────────────────────────────────────────────────────────
   const deleteMessageMutation = useMutation({
     mutationFn: async (msgId: string) => {
-      if (!actor || !sessionId || !convId) throw new Error("Not ready");
-      await actor.deleteMessageForEveryone(sessionId, convId, msgId);
+      if (!sessionId || !convId) throw new Error("Not ready");
+      await backend.deleteMessageForEveryone(sessionId, convId, msgId);
     },
     onMutate: async (msgId) => {
       // Optimistic local delete
@@ -1194,8 +1235,8 @@ export default function ChatScreen() {
   // ── React mutation ─────────────────────────────────────────────────────────
   const reactMutation = useMutation({
     mutationFn: async ({ msgId, emoji }: { msgId: string; emoji: string }) => {
-      if (!actor || !sessionId || !convId) return;
-      await actor.reactToMessage(sessionId, convId, msgId, emoji);
+      if (!sessionId || !convId) return;
+      await backend.reactToMessage(sessionId, convId, msgId, emoji);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -1439,11 +1480,16 @@ export default function ChatScreen() {
                 </div>
               )}
               {sortedMessages.map((msg, index) => {
-                const isMine = msg.senderId === currentUserId;
+                // Use ref value as it may be more up-to-date than the closed-over value
+                const effectiveUserId =
+                  currentUserIdRef.current || currentUserId;
+                const isMine =
+                  !!effectiveUserId &&
+                  String(msg.senderId).trim() === effectiveUserId.trim();
                 // Debug: log ID comparison for first few messages
                 if (index < 3) {
                   console.debug(
-                    `[SunflowerChat] msg[${index}] senderId="${msg.senderId}" currentUserId="${currentUserId}" isMine=${isMine}`,
+                    `[SunflowerChat] msg[${index}] senderId="${msg.senderId}" currentUserId="${effectiveUserId}" isMine=${isMine}`,
                   );
                 }
                 const isOptimistic = msg.id.startsWith("optimistic-");

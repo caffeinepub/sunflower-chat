@@ -191,6 +191,34 @@ export function removeSecretMessage(convId: string, msgId: string): void {
   localStorage.setItem(key.secretMessages(convId), JSON.stringify([...set]));
 }
 
+// ─── Avatar URL ──────────────────────────────────────────────────────────────
+
+export function getAvatarUrl(userId: string): string {
+  return localStorage.getItem(`sf_avatar_${userId}`) ?? "";
+}
+
+export function setAvatarUrl(userId: string, url: string): void {
+  if (url) {
+    localStorage.setItem(`sf_avatar_${userId}`, url);
+  } else {
+    localStorage.removeItem(`sf_avatar_${userId}`);
+  }
+}
+
+// ─── Avatar Frame ─────────────────────────────────────────────────────────────
+
+export type AvatarFrame = "none" | "sunflower" | "golden";
+
+export function getAvatarFrame(userId: string): AvatarFrame {
+  return (
+    (localStorage.getItem(`sf_avatar_frame_${userId}`) as AvatarFrame) ?? "none"
+  );
+}
+
+export function setAvatarFrame(userId: string, frame: AvatarFrame): void {
+  localStorage.setItem(`sf_avatar_frame_${userId}`, frame);
+}
+
 // ─── Deleted Messages ────────────────────────────────────────────────────────
 
 export function getDeletedMessages(convId: string): Set<string> {
