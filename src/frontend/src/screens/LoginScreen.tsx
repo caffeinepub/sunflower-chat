@@ -341,10 +341,17 @@ function EmailLoginFlow({
     setError(null);
     setLoading(true);
     try {
+      let sessionId: string;
       if (mode === "register") {
-        await actor.register(username.trim(), email.trim(), password);
+        // register now returns a sessionId directly
+        sessionId = await actor.register(
+          username.trim(),
+          email.trim(),
+          password,
+        );
+      } else {
+        sessionId = await actor.login(email.trim(), password);
       }
-      const sessionId = await actor.login(email.trim(), password);
       try {
         await actor.seedSampleData();
       } catch {

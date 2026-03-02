@@ -1,41 +1,36 @@
 import Map "mo:core/Map";
 import List "mo:core/List";
+import Array "mo:core/Array";
+import Text "mo:core/Text";
+import Time "mo:core/Time";
+import Int "mo:core/Int";
 import Iter "mo:core/Iter";
 
 module {
-  type OldActor = {
-    users : Map.Map<Text, OldUser>;
-    conversations : Map.Map<Text, OldConversation>;
-    emailToUserId : Map.Map<Text, Text>;
-    sessions : Map.Map<Text, Text>;
-    nextId : Nat;
-  };
+  type UserId = Text;
+  type SessionId = Text;
+  type Email = Text;
+  type Mobile = Text;
+  type MessageId = Text;
+  type ConversationId = Text;
 
-  type OldUser = {
-    id : Text;
+  type OldUser3 = {
+    id : UserId;
     username : Text;
-    email : Text;
+    email : ?Email;
+    mobile : ?Mobile;
     avatarColor : ?Text;
     isPublic : Bool;
     hideLastSeen : Bool;
-    lastSeen : Int;
-  };
-
-  type OldConversation = {
-    id : Text;
-    participantIds : [Text];
-    messages : List.List<OldMessage>;
-    isPinned : Bool;
-    isGroup : Bool;
-    groupName : ?Text;
+    lastSeen : Time.Time;
   };
 
   type OldMessage = {
-    id : Text;
-    senderId : Text;
+    id : MessageId;
+    senderId : UserId;
     senderName : Text;
     content : Text;
-    timestamp : Int;
+    timestamp : Time.Time;
     edited : Bool;
     deleted : Bool;
     replyToId : ?Text;
@@ -44,43 +39,76 @@ module {
     reactions : Text;
   };
 
-  type NewActor = {
-    users : Map.Map<Text, NewUser>;
-    conversations : Map.Map<Text, OldConversation>;
-    emailToUserId : Map.Map<Text, Text>;
-    sessions : Map.Map<Text, Text>;
-    nextId : Nat;
-    mobileToUserId : Map.Map<Text, Text>;
-    otps : Map.Map<Text, { code : Text; expiresAt : Int }>;
+  type OldConversation = {
+    id : ConversationId;
+    participantIds : [UserId];
+    messages : List.List<OldMessage>;
+    isPinned : Bool;
+    isGroup : Bool;
+    groupName : ?Text;
   };
 
-  type NewUser = {
-    id : Text;
+  type OldActor = {
+    users : Map.Map<UserId, OldUser3>;
+    sessions : Map.Map<SessionId, UserId>;
+    conversations : Map.Map<ConversationId, OldConversation>;
+    emailToUserId : Map.Map<Email, UserId>;
+    mobileToUserId : Map.Map<Mobile, UserId>;
+    otps : Map.Map<Text, { code : Text; expiresAt : Time.Time }>;
+    nextId : Nat;
+  };
+
+  type NewUser3 = {
+    id : UserId;
     username : Text;
-    email : ?Text;
-    mobile : ?Text;
+    email : ?Email;
+    mobile : ?Mobile;
     avatarColor : ?Text;
     isPublic : Bool;
     hideLastSeen : Bool;
-    lastSeen : Int;
+    lastSeen : Time.Time;
+    passwordHash : ?Text;
+  };
+
+  type NewMessage = {
+    id : MessageId;
+    senderId : UserId;
+    senderName : Text;
+    content : Text;
+    timestamp : Time.Time;
+    edited : Bool;
+    deleted : Bool;
+    replyToId : ?Text;
+    replyPreview : ?Text;
+    messageType : Text;
+    reactions : Text;
+  };
+
+  type NewConversation = {
+    id : ConversationId;
+    participantIds : [UserId];
+    messages : List.List<NewMessage>;
+    isPinned : Bool;
+    isGroup : Bool;
+    groupName : ?Text;
+  };
+
+  type NewActor = {
+    users : Map.Map<UserId, NewUser3>;
+    sessions : Map.Map<SessionId, UserId>;
+    conversations : Map.Map<ConversationId, NewConversation>;
+    emailToUserId : Map.Map<Email, UserId>;
+    mobileToUserId : Map.Map<Mobile, UserId>;
+    otps : Map.Map<Text, { code : Text; expiresAt : Time.Time }>;
+    nextId : Nat;
   };
 
   public func run(old : OldActor) : NewActor {
-    let newUsers = old.users.map<Text, OldUser, NewUser>(
+    let newUsers = old.users.map<UserId, OldUser3, NewUser3>(
       func(_id, oldUser) {
-        {
-          oldUser with
-          email = ?oldUser.email;
-          mobile = null;
-        };
+        { oldUser with passwordHash = null };
       }
     );
-
-    {
-      old with
-      users = newUsers;
-      mobileToUserId = Map.empty<Text, Text>();
-      otps = Map.empty<Text, { code : Text; expiresAt : Int }>();
-    };
+    { old with users = newUsers };
   };
 };

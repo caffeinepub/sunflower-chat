@@ -6,11 +6,10 @@ import Text "mo:core/Text";
 import Order "mo:core/Order";
 import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
-
-
+import Migration "migration";
 import Int "mo:core/Int";
 
-
+(with migration = Migration.run)
 actor {
   type UserId = Text;
   type SessionId = Text;
@@ -30,6 +29,7 @@ actor {
     isPublic : Bool;
     hideLastSeen : Bool;
     lastSeen : Time.Time;
+    passwordHash : ?Text;
   };
 
   type Message = {
@@ -156,7 +156,7 @@ actor {
     otps.add(identifier, otpRecord);
   };
 
-  public shared ({ caller }) func register(username : Text, email : Text, password : Text) : async () {
+  public shared ({ caller }) func register(username : Text, email : Text, password : Text) : async SessionId {
     if (emailToUserId.containsKey(email)) {
       Runtime.trap("Email already in use");
     };
@@ -171,11 +171,15 @@ actor {
       isPublic = true;
       hideLastSeen = false;
       lastSeen = Time.now();
+      passwordHash = ?hashPassword(password);
     };
 
     users.add(userId, user);
     emailToUserId.add(email, userId);
-    sessions.add(generateId(), userId);
+
+    let sessionId = generateId();
+    sessions.add(sessionId, userId);
+    sessionId;
   };
 
   public shared ({ caller }) func registerWithMobile(username : Text, mobile : Text) : async Text {
@@ -193,6 +197,7 @@ actor {
       isPublic = true;
       hideLastSeen = false;
       lastSeen = Time.now();
+      passwordHash = null;
     };
 
     users.add(userId, user);
@@ -226,6 +231,19 @@ actor {
   public shared ({ caller }) func login(email : Text, password : Text) : async SessionId {
     switch (emailToUserId.get(email)) {
       case (?userId) {
+        switch (users.get(userId)) {
+          case (?user) {
+            switch (user.passwordHash) {
+              case (?storedHash) {
+                if (storedHash != hashPassword(password)) {
+                  Runtime.trap("Invalid credentials");
+                };
+              };
+              case (null) { Runtime.trap("Invalid credentials") };
+            };
+          };
+          case (null) { Runtime.trap("Invalid credentials") };
+        };
         let sessionId = generateId();
         sessions.add(sessionId, userId);
         sessionId;
@@ -261,7 +279,19 @@ actor {
       case (?storedOtp) {
         if (storedOtp.code == otp and Time.now() <= storedOtp.expiresAt) {
           switch (emailToUserId.get(email)) {
-            case (?_) { () };
+            case (?userId) {
+              switch (users.get(userId)) {
+                case (?user) {
+                  let updatedUser : User3 = {
+                    user with
+                    passwordHash = ?hashPassword(newPassword)
+                  };
+                  users.add(userId, updatedUser);
+                  ();
+                };
+                case (null) { Runtime.trap("User does not exist") };
+              };
+            };
             case (null) { Runtime.trap("User does not exist") };
           };
         } else {
@@ -620,6 +650,7 @@ actor {
       isPublic = true;
       hideLastSeen = false;
       lastSeen = Time.now();
+      passwordHash = ?"alice@test.com";
     };
     let bob : User3 = {
       id = "1";
@@ -630,6 +661,7 @@ actor {
       isPublic = true;
       hideLastSeen = false;
       lastSeen = Time.now();
+      passwordHash = ?"bob@test.com";
     };
     let charlie : User3 = {
       id = "2";
@@ -640,6 +672,7 @@ actor {
       isPublic = true;
       hideLastSeen = false;
       lastSeen = Time.now();
+      passwordHash = ?"charlie@test.com";
     };
 
     users.add(alice.id, alice);

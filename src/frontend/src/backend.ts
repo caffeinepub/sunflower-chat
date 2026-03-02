@@ -140,7 +140,7 @@ export interface backendInterface {
     loginWithMobile(mobile: string): Promise<string>;
     pinConversation(sessionId: SessionId, conversationId: ConversationId, pinned: boolean): Promise<void>;
     reactToMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, emoji: string): Promise<void>;
-    register(username: string, email: string, password: string): Promise<void>;
+    register(username: string, email: string, password: string): Promise<SessionId>;
     registerWithMobile(username: string, mobile: string): Promise<string>;
     requestPasswordReset(email: string): Promise<string>;
     seedSampleData(): Promise<void>;
@@ -321,7 +321,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async register(arg0: string, arg1: string, arg2: string): Promise<void> {
+    async register(arg0: string, arg1: string, arg2: string): Promise<SessionId> {
         if (this.processError) {
             try {
                 const result = await this.actor.register(arg0, arg1, arg2);

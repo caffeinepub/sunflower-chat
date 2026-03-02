@@ -82,7 +82,7 @@ export interface _SERVICE {
     [SessionId, ConversationId, MessageId, string],
     undefined
   >,
-  'register' : ActorMethod<[string, string, string], undefined>,
+  'register' : ActorMethod<[string, string, string], SessionId>,
   'registerWithMobile' : ActorMethod<[string, string], string>,
   'requestPasswordReset' : ActorMethod<[string], string>,
   'seedSampleData' : ActorMethod<[], undefined>,

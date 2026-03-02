@@ -58,7 +58,7 @@ export interface backendInterface {
     loginWithMobile(mobile: string): Promise<string>;
     pinConversation(sessionId: SessionId, conversationId: ConversationId, pinned: boolean): Promise<void>;
     reactToMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, emoji: string): Promise<void>;
-    register(username: string, email: string, password: string): Promise<void>;
+    register(username: string, email: string, password: string): Promise<SessionId>;
     registerWithMobile(username: string, mobile: string): Promise<string>;
     requestPasswordReset(email: string): Promise<string>;
     seedSampleData(): Promise<void>;
