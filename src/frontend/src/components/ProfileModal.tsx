@@ -1,6 +1,6 @@
 import { Eye, EyeOff, Globe, KeyRound, Loader2, Lock, X } from "lucide-react";
 import { useState } from "react";
-import type { Profile } from "../backend.d";
+import type { Profile3 as Profile } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import {
   PinSetPrompt,

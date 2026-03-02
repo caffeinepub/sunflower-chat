@@ -34,13 +34,15 @@ export interface MessageView {
   'reactions' : string,
   'senderId' : UserId,
 }
-export interface Profile {
+export type Mobile = string;
+export interface Profile3 {
   'id' : UserId,
   'username' : string,
-  'email' : Email,
+  'email' : [] | [Email],
   'avatarColor' : [] | [string],
   'hideLastSeen' : boolean,
   'isPublic' : boolean,
+  'mobile' : [] | [Mobile],
   'lastSeen' : Time,
 }
 export type SessionId = string;
@@ -69,8 +71,9 @@ export interface _SERVICE {
     [SessionId, ConversationId, bigint, bigint],
     Array<MessageView>
   >,
-  'getProfile' : ActorMethod<[SessionId], Profile>,
+  'getProfile' : ActorMethod<[SessionId], Profile3>,
   'login' : ActorMethod<[string, string], SessionId>,
+  'loginWithMobile' : ActorMethod<[string], string>,
   'pinConversation' : ActorMethod<
     [SessionId, ConversationId, boolean],
     undefined
@@ -80,6 +83,8 @@ export interface _SERVICE {
     undefined
   >,
   'register' : ActorMethod<[string, string, string], undefined>,
+  'registerWithMobile' : ActorMethod<[string, string], string>,
+  'requestPasswordReset' : ActorMethod<[string], string>,
   'seedSampleData' : ActorMethod<[], undefined>,
   'sendMessage' : ActorMethod<
     [SessionId, ConversationId, string, [] | [string], [] | [string], string],
@@ -90,6 +95,8 @@ export interface _SERVICE {
     [SessionId, string, [] | [string], boolean, boolean],
     undefined
   >,
+  'verifyMobileOtp' : ActorMethod<[string, string], SessionId>,
+  'verifyPasswordReset' : ActorMethod<[string, string, string], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

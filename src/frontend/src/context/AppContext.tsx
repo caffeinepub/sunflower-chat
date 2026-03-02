@@ -6,7 +6,11 @@ import {
   useEffect,
   useState,
 } from "react";
-import type { ConversationView, Profile, SessionId } from "../backend.d";
+import type {
+  ConversationView,
+  Profile3 as Profile,
+  SessionId,
+} from "../backend.d";
 
 export type AppScreen = "splash" | "login" | "chatList" | "chat";
 

@@ -7,7 +7,18 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
+export type Mobile = string;
 export type UserId = string;
+export interface Profile3 {
+    id: UserId;
+    username: string;
+    email?: Email;
+    avatarColor?: string;
+    hideLastSeen: boolean;
+    isPublic: boolean;
+    mobile?: Mobile;
+    lastSeen: Time;
+}
 export type Time = bigint;
 export type MessageId = string;
 export interface MessageView {
@@ -32,15 +43,6 @@ export interface ConversationView {
     isPinned: boolean;
 }
 export type SessionId = string;
-export interface Profile {
-    id: UserId;
-    username: string;
-    email: Email;
-    avatarColor?: string;
-    hideLastSeen: boolean;
-    isPublic: boolean;
-    lastSeen: Time;
-}
 export type Email = string;
 export type ConversationId = string;
 export interface backendInterface {
@@ -51,13 +53,18 @@ export interface backendInterface {
     editMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, newContent: string): Promise<void>;
     getConversations(sessionId: SessionId): Promise<Array<ConversationView>>;
     getMessages(sessionId: SessionId, conversationId: ConversationId, page: bigint, pageSize: bigint): Promise<Array<MessageView>>;
-    getProfile(sessionId: SessionId): Promise<Profile>;
+    getProfile(sessionId: SessionId): Promise<Profile3>;
     login(email: string, password: string): Promise<SessionId>;
+    loginWithMobile(mobile: string): Promise<string>;
     pinConversation(sessionId: SessionId, conversationId: ConversationId, pinned: boolean): Promise<void>;
     reactToMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, emoji: string): Promise<void>;
     register(username: string, email: string, password: string): Promise<void>;
+    registerWithMobile(username: string, mobile: string): Promise<string>;
+    requestPasswordReset(email: string): Promise<string>;
     seedSampleData(): Promise<void>;
     sendMessage(sessionId: SessionId, conversationId: ConversationId, content: string, replyToId: string | null, replyPreview: string | null, messageType: string): Promise<void>;
     updateLastSeen(sessionId: SessionId): Promise<void>;
     updateProfile(sessionId: SessionId, username: string, avatarColor: string | null, isPublic: boolean, hideLastSeen: boolean): Promise<void>;
+    verifyMobileOtp(mobile: string, otp: string): Promise<SessionId>;
+    verifyPasswordReset(email: string, otp: string, newPassword: string): Promise<void>;
 }

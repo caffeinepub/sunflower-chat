@@ -89,7 +89,18 @@ export class ExternalBlob {
         return this;
     }
 }
+export type Mobile = string;
 export type UserId = string;
+export interface Profile3 {
+    id: UserId;
+    username: string;
+    email?: Email;
+    avatarColor?: string;
+    hideLastSeen: boolean;
+    isPublic: boolean;
+    mobile?: Mobile;
+    lastSeen: Time;
+}
 export type Time = bigint;
 export type MessageId = string;
 export interface MessageView {
@@ -114,15 +125,6 @@ export interface ConversationView {
     isPinned: boolean;
 }
 export type SessionId = string;
-export interface Profile {
-    id: UserId;
-    username: string;
-    email: Email;
-    avatarColor?: string;
-    hideLastSeen: boolean;
-    isPublic: boolean;
-    lastSeen: Time;
-}
 export type Email = string;
 export type ConversationId = string;
 export interface backendInterface {
@@ -133,17 +135,22 @@ export interface backendInterface {
     editMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, newContent: string): Promise<void>;
     getConversations(sessionId: SessionId): Promise<Array<ConversationView>>;
     getMessages(sessionId: SessionId, conversationId: ConversationId, page: bigint, pageSize: bigint): Promise<Array<MessageView>>;
-    getProfile(sessionId: SessionId): Promise<Profile>;
+    getProfile(sessionId: SessionId): Promise<Profile3>;
     login(email: string, password: string): Promise<SessionId>;
+    loginWithMobile(mobile: string): Promise<string>;
     pinConversation(sessionId: SessionId, conversationId: ConversationId, pinned: boolean): Promise<void>;
     reactToMessage(sessionId: SessionId, conversationId: ConversationId, messageId: MessageId, emoji: string): Promise<void>;
     register(username: string, email: string, password: string): Promise<void>;
+    registerWithMobile(username: string, mobile: string): Promise<string>;
+    requestPasswordReset(email: string): Promise<string>;
     seedSampleData(): Promise<void>;
     sendMessage(sessionId: SessionId, conversationId: ConversationId, content: string, replyToId: string | null, replyPreview: string | null, messageType: string): Promise<void>;
     updateLastSeen(sessionId: SessionId): Promise<void>;
     updateProfile(sessionId: SessionId, username: string, avatarColor: string | null, isPublic: boolean, hideLastSeen: boolean): Promise<void>;
+    verifyMobileOtp(mobile: string, otp: string): Promise<SessionId>;
+    verifyPasswordReset(email: string, otp: string, newPassword: string): Promise<void>;
 }
-import type { ConversationId as _ConversationId, ConversationView as _ConversationView, Email as _Email, MessageId as _MessageId, MessageView as _MessageView, Profile as _Profile, Time as _Time, UserId as _UserId } from "./declarations/backend.did.d.ts";
+import type { ConversationId as _ConversationId, ConversationView as _ConversationView, Email as _Email, MessageId as _MessageId, MessageView as _MessageView, Mobile as _Mobile, Profile3 as _Profile3, Time as _Time, UserId as _UserId } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async broadcastMessage(arg0: SessionId, arg1: Array<string>, arg2: string): Promise<void> {
@@ -244,18 +251,18 @@ export class Backend implements backendInterface {
             return from_candid_vec_n4(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getProfile(arg0: SessionId): Promise<Profile> {
+    async getProfile(arg0: SessionId): Promise<Profile3> {
         if (this.processError) {
             try {
                 const result = await this.actor.getProfile(arg0);
-                return from_candid_Profile_n8(this._uploadFile, this._downloadFile, result);
+                return from_candid_Profile3_n8(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getProfile(arg0);
-            return from_candid_Profile_n8(this._uploadFile, this._downloadFile, result);
+            return from_candid_Profile3_n8(this._uploadFile, this._downloadFile, result);
         }
     }
     async login(arg0: string, arg1: string): Promise<SessionId> {
@@ -269,6 +276,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.login(arg0, arg1);
+            return result;
+        }
+    }
+    async loginWithMobile(arg0: string): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.loginWithMobile(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.loginWithMobile(arg0);
             return result;
         }
     }
@@ -314,6 +335,34 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async registerWithMobile(arg0: string, arg1: string): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.registerWithMobile(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.registerWithMobile(arg0, arg1);
+            return result;
+        }
+    }
+    async requestPasswordReset(arg0: string): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.requestPasswordReset(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.requestPasswordReset(arg0);
+            return result;
+        }
+    }
     async seedSampleData(): Promise<void> {
         if (this.processError) {
             try {
@@ -331,14 +380,14 @@ export class Backend implements backendInterface {
     async sendMessage(arg0: SessionId, arg1: ConversationId, arg2: string, arg3: string | null, arg4: string | null, arg5: string): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.sendMessage(arg0, arg1, arg2, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg3), to_candid_opt_n10(this._uploadFile, this._downloadFile, arg4), arg5);
+                const result = await this.actor.sendMessage(arg0, arg1, arg2, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg3), to_candid_opt_n12(this._uploadFile, this._downloadFile, arg4), arg5);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.sendMessage(arg0, arg1, arg2, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg3), to_candid_opt_n10(this._uploadFile, this._downloadFile, arg4), arg5);
+            const result = await this.actor.sendMessage(arg0, arg1, arg2, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg3), to_candid_opt_n12(this._uploadFile, this._downloadFile, arg4), arg5);
             return result;
         }
     }
@@ -359,14 +408,42 @@ export class Backend implements backendInterface {
     async updateProfile(arg0: SessionId, arg1: string, arg2: string | null, arg3: boolean, arg4: boolean): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.updateProfile(arg0, arg1, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg2), arg3, arg4);
+                const result = await this.actor.updateProfile(arg0, arg1, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg2), arg3, arg4);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.updateProfile(arg0, arg1, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg2), arg3, arg4);
+            const result = await this.actor.updateProfile(arg0, arg1, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg2), arg3, arg4);
+            return result;
+        }
+    }
+    async verifyMobileOtp(arg0: string, arg1: string): Promise<SessionId> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.verifyMobileOtp(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.verifyMobileOtp(arg0, arg1);
+            return result;
+        }
+    }
+    async verifyPasswordReset(arg0: string, arg1: string, arg2: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.verifyPasswordReset(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.verifyPasswordReset(arg0, arg1, arg2);
             return result;
         }
     }
@@ -377,8 +454,14 @@ function from_candid_ConversationView_n2(_uploadFile: (file: ExternalBlob) => Pr
 function from_candid_MessageView_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _MessageView): MessageView {
     return from_candid_record_n6(_uploadFile, _downloadFile, value);
 }
-function from_candid_Profile_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Profile): Profile {
+function from_candid_Profile3_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Profile3): Profile3 {
     return from_candid_record_n9(_uploadFile, _downloadFile, value);
+}
+function from_candid_opt_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Email]): Email | null {
+    return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Mobile]): Mobile | null {
+    return value.length === 0 ? null : value[0];
 }
 function from_candid_opt_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [string]): string | null {
     return value.length === 0 ? null : value[0];
@@ -449,27 +532,30 @@ function from_candid_record_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint
 function from_candid_record_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: _UserId;
     username: string;
-    email: _Email;
+    email: [] | [_Email];
     avatarColor: [] | [string];
     hideLastSeen: boolean;
     isPublic: boolean;
+    mobile: [] | [_Mobile];
     lastSeen: _Time;
 }): {
     id: UserId;
     username: string;
-    email: Email;
+    email?: Email;
     avatarColor?: string;
     hideLastSeen: boolean;
     isPublic: boolean;
+    mobile?: Mobile;
     lastSeen: Time;
 } {
     return {
         id: value.id,
         username: value.username,
-        email: value.email,
+        email: record_opt_to_undefined(from_candid_opt_n10(_uploadFile, _downloadFile, value.email)),
         avatarColor: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.avatarColor)),
         hideLastSeen: value.hideLastSeen,
         isPublic: value.isPublic,
+        mobile: record_opt_to_undefined(from_candid_opt_n11(_uploadFile, _downloadFile, value.mobile)),
         lastSeen: value.lastSeen
     };
 }
@@ -479,7 +565,7 @@ function from_candid_vec_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Ar
 function from_candid_vec_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_MessageView>): Array<MessageView> {
     return value.map((x)=>from_candid_MessageView_n5(_uploadFile, _downloadFile, x));
 }
-function to_candid_opt_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: string | null): [] | [string] {
+function to_candid_opt_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: string | null): [] | [string] {
     return value === null ? candid_none() : candid_some(value);
 }
 export interface CreateActorOptions {

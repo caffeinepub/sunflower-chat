@@ -35,13 +35,15 @@ export const ConversationView = IDL.Record({
   'isPinned' : IDL.Bool,
 });
 export const Email = IDL.Text;
-export const Profile = IDL.Record({
+export const Mobile = IDL.Text;
+export const Profile3 = IDL.Record({
   'id' : UserId,
   'username' : IDL.Text,
-  'email' : Email,
+  'email' : IDL.Opt(Email),
   'avatarColor' : IDL.Opt(IDL.Text),
   'hideLastSeen' : IDL.Bool,
   'isPublic' : IDL.Bool,
+  'mobile' : IDL.Opt(Mobile),
   'lastSeen' : Time,
 });
 
@@ -77,8 +79,9 @@ export const idlService = IDL.Service({
       [IDL.Vec(MessageView)],
       ['query'],
     ),
-  'getProfile' : IDL.Func([SessionId], [Profile], ['query']),
+  'getProfile' : IDL.Func([SessionId], [Profile3], ['query']),
   'login' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
+  'loginWithMobile' : IDL.Func([IDL.Text], [IDL.Text], []),
   'pinConversation' : IDL.Func([SessionId, ConversationId, IDL.Bool], [], []),
   'reactToMessage' : IDL.Func(
       [SessionId, ConversationId, MessageId, IDL.Text],
@@ -86,6 +89,8 @@ export const idlService = IDL.Service({
       [],
     ),
   'register' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+  'registerWithMobile' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+  'requestPasswordReset' : IDL.Func([IDL.Text], [IDL.Text], []),
   'seedSampleData' : IDL.Func([], [], []),
   'sendMessage' : IDL.Func(
       [
@@ -105,6 +110,8 @@ export const idlService = IDL.Service({
       [],
       [],
     ),
+  'verifyMobileOtp' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
+  'verifyPasswordReset' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
 });
 
 export const idlInitArgs = [];
@@ -137,13 +144,15 @@ export const idlFactory = ({ IDL }) => {
     'isPinned' : IDL.Bool,
   });
   const Email = IDL.Text;
-  const Profile = IDL.Record({
+  const Mobile = IDL.Text;
+  const Profile3 = IDL.Record({
     'id' : UserId,
     'username' : IDL.Text,
-    'email' : Email,
+    'email' : IDL.Opt(Email),
     'avatarColor' : IDL.Opt(IDL.Text),
     'hideLastSeen' : IDL.Bool,
     'isPublic' : IDL.Bool,
+    'mobile' : IDL.Opt(Mobile),
     'lastSeen' : Time,
   });
   
@@ -183,8 +192,9 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(MessageView)],
         ['query'],
       ),
-    'getProfile' : IDL.Func([SessionId], [Profile], ['query']),
+    'getProfile' : IDL.Func([SessionId], [Profile3], ['query']),
     'login' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
+    'loginWithMobile' : IDL.Func([IDL.Text], [IDL.Text], []),
     'pinConversation' : IDL.Func([SessionId, ConversationId, IDL.Bool], [], []),
     'reactToMessage' : IDL.Func(
         [SessionId, ConversationId, MessageId, IDL.Text],
@@ -192,6 +202,8 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'register' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+    'registerWithMobile' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+    'requestPasswordReset' : IDL.Func([IDL.Text], [IDL.Text], []),
     'seedSampleData' : IDL.Func([], [], []),
     'sendMessage' : IDL.Func(
         [
@@ -211,6 +223,8 @@ export const idlFactory = ({ IDL }) => {
         [],
         [],
       ),
+    'verifyMobileOtp' : IDL.Func([IDL.Text, IDL.Text], [SessionId], []),
+    'verifyPasswordReset' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   });
 };
 

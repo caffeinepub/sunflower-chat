@@ -4,9 +4,10 @@ import List "mo:core/List";
 import Array "mo:core/Array";
 import Text "mo:core/Text";
 import Order "mo:core/Order";
-import Iter "mo:core/Iter";
 import Runtime "mo:core/Runtime";
+import Iter "mo:core/Iter";
 import Migration "migration";
+
 import Int "mo:core/Int";
 
 (with migration = Migration.run)
@@ -18,10 +19,13 @@ actor {
   type MessageId = Text;
   type ConversationId = Text;
 
-  type User = {
+  type Mobile = Text;
+
+  type User3 = {
     id : UserId;
     username : Text;
-    email : Email;
+    email : ?Email;
+    mobile : ?Mobile;
     avatarColor : ?Text;
     isPublic : Bool;
     hideLastSeen : Bool;
@@ -51,10 +55,11 @@ actor {
     groupName : ?Text;
   };
 
-  public type Profile = {
+  public type Profile3 = {
     id : UserId;
     username : Text;
-    email : Email;
+    email : ?Email;
+    mobile : ?Mobile;
     avatarColor : ?Text;
     isPublic : Bool;
     hideLastSeen : Bool;
@@ -84,8 +89,8 @@ actor {
     groupName : ?Text;
   };
 
-  module User {
-    public func compareByLastSeen(a : User, b : User) : Order.Order {
+  module User3 {
+    public func compareByLastSeen(a : User3, b : User3) : Order.Order {
       Int.compare(b.lastSeen, a.lastSeen);
     };
   };
@@ -108,11 +113,19 @@ actor {
     };
   };
 
-  let users = Map.empty<UserId, User>();
+  let users = Map.empty<UserId, User3>();
   let sessions = Map.empty<SessionId, UserId>();
   let conversations = Map.empty<ConversationId, Conversation>();
   let emailToUserId = Map.empty<Email, UserId>();
+  let mobileToUserId = Map.empty<Mobile, UserId>();
   var nextId = 0;
+
+  type Otp = {
+    code : Text;
+    expiresAt : Time.Time;
+  };
+
+  let otps = Map.empty<Text, Otp>();
 
   func generateId() : Text {
     let id = nextId;
@@ -131,16 +144,29 @@ actor {
     };
   };
 
+  func generateOtp() : Text {
+    (Time.now() % 1000000).toText();
+  };
+
+  func storeOtp(identifier : Text, otp : Text) {
+    let otpRecord : Otp = {
+      code = otp;
+      expiresAt = Time.now() + 300_000_000_000;
+    };
+    otps.add(identifier, otpRecord);
+  };
+
   public shared ({ caller }) func register(username : Text, email : Text, password : Text) : async () {
     if (emailToUserId.containsKey(email)) {
       Runtime.trap("Email already in use");
     };
 
     let userId = generateId();
-    let user : User = {
+    let user : User3 = {
       id = userId;
       username;
-      email;
+      email = ?email;
+      mobile = null;
       avatarColor = null;
       isPublic = true;
       hideLastSeen = false;
@@ -150,6 +176,51 @@ actor {
     users.add(userId, user);
     emailToUserId.add(email, userId);
     sessions.add(generateId(), userId);
+  };
+
+  public shared ({ caller }) func registerWithMobile(username : Text, mobile : Text) : async Text {
+    if (mobileToUserId.containsKey(mobile)) {
+      Runtime.trap("Mobile already in use");
+    };
+
+    let userId = generateId();
+    let user : User3 = {
+      id = userId;
+      username;
+      email = null;
+      mobile = ?mobile;
+      avatarColor = null;
+      isPublic = true;
+      hideLastSeen = false;
+      lastSeen = Time.now();
+    };
+
+    users.add(userId, user);
+    mobileToUserId.add(mobile, userId);
+
+    let otp = generateOtp();
+    storeOtp(mobile, otp);
+    otp;
+  };
+
+  public shared ({ caller }) func verifyMobileOtp(mobile : Text, otp : Text) : async SessionId {
+    switch (otps.get(mobile)) {
+      case (?storedOtp) {
+        if (storedOtp.code == otp and Time.now() <= storedOtp.expiresAt) {
+          switch (mobileToUserId.get(mobile)) {
+            case (?userId) {
+              let sessionId = generateId();
+              sessions.add(sessionId, userId);
+              return sessionId;
+            };
+            case (null) { Runtime.trap("User does not exist") };
+          };
+        } else {
+          Runtime.trap("Invalid or expired OTP");
+        };
+      };
+      case (null) { Runtime.trap("Invalid OTP") };
+    };
   };
 
   public shared ({ caller }) func login(email : Text, password : Text) : async SessionId {
@@ -163,7 +234,45 @@ actor {
     };
   };
 
-  public query ({ caller }) func getProfile(sessionId : SessionId) : async Profile {
+  public shared ({ caller }) func loginWithMobile(mobile : Text) : async Text {
+    switch (mobileToUserId.get(mobile)) {
+      case (?_) {
+        let otp = generateOtp();
+        storeOtp(mobile, otp);
+        otp;
+      };
+      case (null) { Runtime.trap("User does not exist") };
+    };
+  };
+
+  public shared ({ caller }) func requestPasswordReset(email : Text) : async Text {
+    switch (emailToUserId.get(email)) {
+      case (?_) {
+        let otp = generateOtp();
+        storeOtp(email, otp);
+        otp;
+      };
+      case (null) { Runtime.trap("Email does not exist") };
+    };
+  };
+
+  public shared ({ caller }) func verifyPasswordReset(email : Text, otp : Text, newPassword : Text) : async () {
+    switch (otps.get(email)) {
+      case (?storedOtp) {
+        if (storedOtp.code == otp and Time.now() <= storedOtp.expiresAt) {
+          switch (emailToUserId.get(email)) {
+            case (?_) { () };
+            case (null) { Runtime.trap("User does not exist") };
+          };
+        } else {
+          Runtime.trap("Invalid or expired OTP");
+        };
+      };
+      case (null) { Runtime.trap("Invalid OTP") };
+    };
+  };
+
+  public query ({ caller }) func getProfile(sessionId : SessionId) : async Profile3 {
     let userId = validateUser(sessionId);
     switch (users.get(userId)) {
       case (?user) {
@@ -171,6 +280,7 @@ actor {
           id = user.id;
           username = user.username;
           email = user.email;
+          mobile = user.mobile;
           avatarColor = user.avatarColor;
           isPublic = user.isPublic;
           hideLastSeen = user.hideLastSeen;
@@ -191,7 +301,7 @@ actor {
     let userId = validateUser(sessionId);
     switch (users.get(userId)) {
       case (?user) {
-        let updatedUser : User = {
+        let updatedUser : User3 = {
           user with
           username;
           avatarColor;
@@ -208,7 +318,7 @@ actor {
     let userId = validateUser(sessionId);
     switch (users.get(userId)) {
       case (?user) {
-        let updatedUser : User = {
+        let updatedUser : User3 = {
           user with
           lastSeen = Time.now();
         };
@@ -292,7 +402,7 @@ actor {
   };
 
   public shared ({ caller }) func pinConversation(sessionId : SessionId, conversationId : ConversationId, pinned : Bool) : async () {
-    let _ = validateUser(sessionId);
+    ignore validateUser(sessionId);
     switch (conversations.get(conversationId)) {
       case (?conv) {
         let updatedConv : Conversation = {
@@ -449,7 +559,7 @@ actor {
     page : Nat,
     pageSize : Nat,
   ) : async [MessageView] {
-    ignore switch (sessions.get(sessionId)) {
+    switch (sessions.get(sessionId)) {
       case (?_) { () };
       case (null) { Runtime.trap("Invalid session") };
     };
@@ -501,28 +611,31 @@ actor {
   };
 
   public shared ({ caller }) func seedSampleData() : async () {
-    let alice : User = {
+    let alice : User3 = {
       id = "0";
       username = "Alice";
-      email = "alice@test.com";
+      email = ?"alice@test.com";
+      mobile = null;
       avatarColor = ?"ff0000";
       isPublic = true;
       hideLastSeen = false;
       lastSeen = Time.now();
     };
-    let bob : User = {
+    let bob : User3 = {
       id = "1";
       username = "Bob";
-      email = "bob@test.com";
+      email = ?"bob@test.com";
+      mobile = null;
       avatarColor = ?"00ff00";
       isPublic = true;
       hideLastSeen = false;
       lastSeen = Time.now();
     };
-    let charlie : User = {
+    let charlie : User3 = {
       id = "2";
       username = "Charlie";
-      email = "charlie@test.com";
+      email = ?"charlie@test.com";
+      mobile = null;
       avatarColor = ?"0000ff";
       isPublic = true;
       hideLastSeen = false;
